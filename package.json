@@ -1,7 +1,8 @@
 {
-  "name": "terax",
+  "name": "lair",
   "private": true,
   "version": "0.7.3",
+  "description": "Personal desktop hub for Claude Code + Codex.",
   "license": "Apache-2.0",
   "type": "module",
   "scripts": {
