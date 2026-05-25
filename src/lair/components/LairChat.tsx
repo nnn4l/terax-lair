@@ -4,6 +4,7 @@ import { useLair } from "@/lair/state";
 import { AgentDropdown } from "@/lair/components/AgentDropdown";
 import { Card } from "@/lair/components/Card";
 import { PhaseDropdown } from "@/lair/components/PhaseDropdown";
+import { WorkspaceSwitcher } from "@/lair/components/WorkspaceSwitcher";
 
 export function LairChat() {
   const cards = useLair((state) => state.cards);
@@ -57,9 +58,7 @@ export function LairChat() {
     <div className="flex h-full min-h-0 flex-col bg-background">
       <div className="flex items-center justify-between gap-3 border-b border-border/60 bg-card/60 px-3 py-2">
         <PhaseDropdown />
-        <span className="min-w-0 truncate text-[11px] text-muted-foreground">
-          {workspace || "no workspace"}
-        </span>
+        <WorkspaceSwitcher />
       </div>
 
       <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto p-3">

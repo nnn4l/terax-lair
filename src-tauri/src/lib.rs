@@ -2,6 +2,7 @@ pub mod lair;
 mod modules;
 
 use lair::orchestrator::{lair_send_message, LairConfig};
+use lair::worktree::lair_list_worktrees;
 use modules::{agent, fs, git, net, pty, secrets, shell, workspace};
 use std::sync::{Arc, Mutex};
 use tauri::{Emitter, Manager, State, WebviewUrl, WebviewWindowBuilder};
@@ -194,6 +195,7 @@ pub fn run() {
             net::ai_http_request,
             net::ai_http_stream,
             lair_send_message,
+            lair_list_worktrees,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

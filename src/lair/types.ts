@@ -34,3 +34,8 @@ export interface StreamChunkEvent {
 export interface CardUpdateEvent {
   card: CardData;
 }
+
+export interface Worktree {
+  path: string;
+  branch: string | null;
+}

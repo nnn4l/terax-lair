@@ -4,7 +4,9 @@ import type {
   CardUpdateEvent,
   SendMessageRequest,
   StreamChunkEvent,
+  Worktree,
 } from "@/lair/types";
+import { currentWorkspaceEnv } from "@/modules/workspace";
 
 export async function sendMessage(req: SendMessageRequest): Promise<string[]> {
   return await invoke<string[]>("lair_send_message", { req });
@@ -24,4 +26,11 @@ export async function onStreamChunk(
   return await listen<StreamChunkEvent>("lair-stream-chunk", (event) =>
     cb(event.payload),
   );
+}
+
+export async function listWorktrees(root: string): Promise<Worktree[]> {
+  return await invoke<Worktree[]>("lair_list_worktrees", {
+    root,
+    workspace: currentWorkspaceEnv(),
+  });
 }
