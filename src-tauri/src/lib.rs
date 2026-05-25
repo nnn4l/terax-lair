@@ -91,7 +91,6 @@ pub fn run() {
     let cli_dir = parse_launch_dir();
     workspace::init_launch_cwd(cli_dir.as_deref());
     let lair_config = Arc::new(LairConfig {
-        openrouter_api_key: std::env::var("OPENROUTER_API_KEY").unwrap_or_else(|_| String::new()),
         openrouter_model: std::env::var("OPENROUTER_MODEL")
             .unwrap_or_else(|_| "anthropic/claude-haiku-4.5".to_string()),
     });

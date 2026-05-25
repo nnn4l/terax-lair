@@ -1,4 +1,5 @@
 use crate::lair::cli_agent::{run_agent_streaming, AgentSpawnRequest};
+use crate::lair::keychain::get_openrouter_key;
 use crate::lair::parser_client::{
     route_agent, summarize_output, RouteRequest, RouteResult, SummarizeRequest,
 };
@@ -8,7 +9,6 @@ use tauri::{AppHandle, Emitter, State};
 use uuid::Uuid;
 
 pub struct LairConfig {
-    pub openrouter_api_key: String,
     pub openrouter_model: String,
 }
 
@@ -35,10 +35,11 @@ pub async fn lair_send_message(
             ids.push(codex_id?);
         }
         AgentChoice::Auto => {
+            let api_key = get_openrouter_key().unwrap_or_default();
             let route = route_agent(RouteRequest {
                 prompt: req.prompt.clone(),
                 phase: phase_key(&req.phase),
-                api_key: config.openrouter_api_key.clone(),
+                api_key,
                 model: config.openrouter_model.clone(),
             })
             .await
@@ -128,14 +129,17 @@ async fn spawn(
 
     let (status, summary, outcome, error) = match exit {
         Ok(0) => {
-            let sum = summarize_output(SummarizeRequest {
-                agent: agent_key(&agent),
-                raw_output: raw.clone(),
-                phase: phase_key(&req.phase),
-                api_key: config.openrouter_api_key.clone(),
-                model: config.openrouter_model.clone(),
-            })
-            .await;
+            let sum = match get_openrouter_key() {
+                Ok(api_key) => summarize_output(SummarizeRequest {
+                    agent: agent_key(&agent),
+                    raw_output: raw.clone(),
+                    phase: phase_key(&req.phase),
+                    api_key,
+                    model: config.openrouter_model.clone(),
+                })
+                .await,
+                Err(e) => Err(e),
+            };
             match sum {
                 Ok(s) => (CardStatus::Done, Some(s.summary), Some(s.outcome), None),
                 Err(e) => (
