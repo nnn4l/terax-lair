@@ -1,8 +1,9 @@
 pub mod lair;
 mod modules;
 
+use lair::orchestrator::{lair_send_message, LairConfig};
 use modules::{agent, fs, git, net, pty, secrets, shell, workspace};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use tauri::{Emitter, Manager, State, WebviewUrl, WebviewWindowBuilder};
 use tauri_plugin_window_state::StateFlags;
 
@@ -88,6 +89,11 @@ async fn open_settings_window(app: tauri::AppHandle, tab: Option<String>) -> Res
 pub fn run() {
     let cli_dir = parse_launch_dir();
     workspace::init_launch_cwd(cli_dir.as_deref());
+    let lair_config = Arc::new(LairConfig {
+        openrouter_api_key: std::env::var("OPENROUTER_API_KEY").unwrap_or_else(|_| String::new()),
+        openrouter_model: std::env::var("OPENROUTER_MODEL")
+            .unwrap_or_else(|_| "anthropic/claude-haiku-4.5".to_string()),
+    });
 
     tauri::Builder::default()
         .plugin(tauri_plugin_process::init())
@@ -110,6 +116,7 @@ pub fn run() {
                 .build(),
         )
         .plugin(tauri_plugin_opener::init())
+        .manage(lair_config)
         .manage(pty::PtyState::default())
         .manage(shell::ShellState::default())
         .manage(secrets::SecretsState::default())
@@ -186,6 +193,7 @@ pub fn run() {
             net::lm_ping,
             net::ai_http_request,
             net::ai_http_stream,
+            lair_send_message,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
