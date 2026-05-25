@@ -5319,6 +5319,7 @@ dependencies = [
  "tauri-plugin-window-state",
  "tempfile",
  "tokio",
+ "uuid",
  "windows-sys 0.59.0",
 ]
 
