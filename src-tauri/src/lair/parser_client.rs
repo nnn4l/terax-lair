@@ -60,7 +60,8 @@ struct ChatResponse {
 const URL: &str = "https://openrouter.ai/api/v1/chat/completions";
 
 pub async fn summarize_output(req: SummarizeRequest) -> Result<SummarizeResult, String> {
-    let system = "You summarize CLI agent output. Reply ONLY with JSON: \
+    let system = "You summarize CLI agent output. Reply with bare JSON ONLY \
+(no markdown, no code fences, no prose before or after): \
 {\"summary\": \"3-5 line plain-English summary of what the agent did\", \
 \"outcome\": \"one-line result (success/fail/partial + key fact)\"}. \
 Caveman style: drop articles, no filler.";
@@ -83,11 +84,13 @@ Caveman style: drop articles, no filler.";
         response_format: serde_json::json!({"type": "json_object"}),
     };
     let raw = call(&req.api_key, &body).await?;
-    serde_json::from_str(&raw).map_err(|e| format!("parse summary json: {e}; got: {raw}"))
+    let cleaned = extract_json(&raw);
+    serde_json::from_str(&cleaned).map_err(|e| format!("parse summary json: {e}; got: {raw}"))
 }
 
 pub async fn route_agent(req: RouteRequest) -> Result<RouteResult, String> {
-    let system = "You route prompts to coding agents. Reply ONLY with JSON: \
+    let system = "You route prompts to coding agents. Reply with bare JSON ONLY \
+(no markdown, no code fences, no prose before or after): \
 {\"agent\": \"claude\" or \"codex\", \"reason\": \"short why\"}. \
 Heuristic: Claude for planning/thinking/ambiguity; Codex for concrete edits. \
 Phase weights: brainstorm/plan/review -> Claude; implement/refactor/test -> Codex.";
@@ -107,7 +110,52 @@ Phase weights: brainstorm/plan/review -> Claude; implement/refactor/test -> Code
         response_format: serde_json::json!({"type": "json_object"}),
     };
     let raw = call(&req.api_key, &body).await?;
-    serde_json::from_str(&raw).map_err(|e| format!("parse route json: {e}; got: {raw}"))
+    let cleaned = extract_json(&raw);
+    serde_json::from_str(&cleaned).map_err(|e| format!("parse route json: {e}; got: {raw}"))
+}
+
+/// Strip Markdown code fences and any prose around the JSON object,
+/// returning the substring between the first `{` and the matching last `}`.
+/// Models often wrap responses in ```json ... ``` despite instructions; this
+/// is a belt-and-suspenders fallback so a single non-compliant reply does not
+/// fail the whole card.
+fn extract_json(s: &str) -> String {
+    let trimmed = s.trim();
+    let start = trimmed.find('{');
+    let end = trimmed.rfind('}');
+    match (start, end) {
+        (Some(a), Some(b)) if b >= a => trimmed[a..=b].to_string(),
+        _ => trimmed.to_string(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::extract_json;
+
+    #[test]
+    fn strips_markdown_json_fence() {
+        let s = "```json\n{ \"summary\": \"x\", \"outcome\": \"y\" }\n```";
+        assert_eq!(
+            extract_json(s),
+            "{ \"summary\": \"x\", \"outcome\": \"y\" }"
+        );
+    }
+
+    #[test]
+    fn strips_prose_around_json() {
+        let s = "Here is the JSON: { \"agent\": \"codex\", \"reason\": \"edit\" } end";
+        assert_eq!(
+            extract_json(s),
+            "{ \"agent\": \"codex\", \"reason\": \"edit\" }"
+        );
+    }
+
+    #[test]
+    fn passthrough_when_already_bare() {
+        let s = "{\"a\":1}";
+        assert_eq!(extract_json(s), "{\"a\":1}");
+    }
 }
 
 async fn call(api_key: &str, body: &ChatRequest) -> Result<String, String> {
