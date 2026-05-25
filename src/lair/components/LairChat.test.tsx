@@ -23,7 +23,7 @@ describe("LairChat components", () => {
       "test",
       "review",
     ]) {
-      expect(html).toContain(`Phase: ${phase}`);
+      expect(html).toContain(`>${phase}</option>`);
     }
   });
 

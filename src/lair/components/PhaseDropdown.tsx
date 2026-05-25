@@ -22,7 +22,7 @@ export function PhaseDropdown() {
     >
       {PHASES.map((item) => (
         <option key={item} value={item}>
-          Phase: {item}
+          {item}
         </option>
       ))}
     </select>
