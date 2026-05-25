@@ -49,7 +49,7 @@ import {
 import { getLaunchDir } from "@/lib/launchDir";
 import { quoteShellArg } from "@/lib/shellQuote";
 import { useZoom } from "@/lib/useZoom";
-import { LairChat } from "@/lair/components/LairChat";
+import { LairFloatingSidebar } from "@/lair/components/LairFloatingSidebar";
 import { useLair } from "@/lair/state";
 import { resolveLairWorkspace } from "@/lair/workspace";
 import { FileExplorer, type FileExplorerHandle } from "@/modules/explorer";
@@ -424,6 +424,7 @@ export default function App() {
     (openaiCompatibleBaseURL.trim().length > 0 &&
       openaiCompatibleModelId.trim().length > 0);
   const hasComposer = hasAnyKey(apiKeys) || hasLocalModel;
+  const canOpenAiPanel = USE_LAIR_CHAT || hasComposer;
 
   const [keysLoaded, setKeysLoaded] = useState(false);
   useEffect(() => {
@@ -707,7 +708,7 @@ export default function App() {
   }, [tabs, activeId]);
 
   const togglePanelAndFocus = useCallback(() => {
-    if (!hasComposer) {
+    if (!canOpenAiPanel) {
       void openSettingsWindow("models");
       return;
     }
@@ -715,15 +716,15 @@ export default function App() {
       useChatStore.getState().closePanel();
     } else {
       openPanel();
-      focusInput(null);
+      if (!USE_LAIR_CHAT) focusInput(null);
     }
-  }, [hasComposer, panelOpen, openPanel, focusInput]);
+  }, [canOpenAiPanel, panelOpen, openPanel, focusInput]);
 
   const attachSelection = useChatStore((s) => s.attachSelection);
 
   const handleAttachFileToAgent = useCallback(
     (path: string) => {
-      if (!hasComposer) {
+      if (!canOpenAiPanel) {
         void openSettingsWindow("models");
         return;
       }
@@ -733,13 +734,13 @@ export default function App() {
         new CustomEvent<string>("terax:ai-attach-file", { detail: path }),
       );
       openPanel();
-      focusInput(null);
+      if (!USE_LAIR_CHAT) focusInput(null);
     },
-    [hasComposer, openPanel, focusInput],
+    [canOpenAiPanel, openPanel, focusInput],
   );
 
   const askFromSelection = useCallback(() => {
-    if (!hasComposer) {
+    if (!canOpenAiPanel) {
       void openSettingsWindow("models");
       return;
     }
@@ -752,7 +753,7 @@ export default function App() {
       activeTab?.kind === "editor" ? "editor" : "terminal";
     attachSelection(selection, source);
   }, [
-    hasComposer,
+    canOpenAiPanel,
     captureActiveSelection,
     focusInput,
     attachSelection,
@@ -1473,7 +1474,7 @@ export default function App() {
                     {workspaceSurface}
                   </div>
 
-                  {keysLoaded ? (
+                  {keysLoaded && !USE_LAIR_CHAT ? (
                     <motion.div
                       data-ai-input-bar
                       initial={false}
@@ -1485,11 +1486,7 @@ export default function App() {
                       className="overflow-hidden"
                       aria-hidden={!panelOpen}
                     >
-                      {USE_LAIR_CHAT ? (
-                        <div className="h-[min(42vh,380px)] min-h-64">
-                          <LairChat />
-                        </div>
-                      ) : hasComposer ? (
+                      {hasComposer ? (
                         <AiInputBar />
                       ) : (
                         <AiInputBarConnect
@@ -1522,6 +1519,12 @@ export default function App() {
             onActivate={onActivateAgent}
           />
           <Toaster position="bottom-right" />
+
+          <AnimatePresence>
+            {USE_LAIR_CHAT ? (
+              <LairFloatingSidebar key="lair-sidebar" open={panelOpen} />
+            ) : null}
+          </AnimatePresence>
 
           {hasComposer ? (
             <>
