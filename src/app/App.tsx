@@ -49,6 +49,9 @@ import {
 import { getLaunchDir } from "@/lib/launchDir";
 import { quoteShellArg } from "@/lib/shellQuote";
 import { useZoom } from "@/lib/useZoom";
+import { LairChat } from "@/lair/components/LairChat";
+import { useLair } from "@/lair/state";
+import { resolveLairWorkspace } from "@/lair/workspace";
 import { FileExplorer, type FileExplorerHandle } from "@/modules/explorer";
 import {
   listenFsChanged,
@@ -129,6 +132,7 @@ const SIDEBAR_MIN_WIDTH = 220;
 const SIDEBAR_MAX_WIDTH = 480;
 const SIDEBAR_WIDTH_STORAGE_KEY = "terax.sidebar.width";
 const SIDEBAR_VIEW_STORAGE_KEY = "terax.sidebar.view";
+const USE_LAIR_CHAT = true;
 
 function clampSidebarWidth(width: number): number {
   return Math.min(
@@ -367,7 +371,7 @@ export default function App() {
         try {
           await native.workspaceAuthorize(nextHome);
         } catch {
-          // Non-fatal — git panel will surface "not authorized" if needed.
+          // Non-fatal: git panel will surface "not authorized" if needed.
         }
       }
       resetWorkspace(nextHome ?? undefined);
@@ -395,6 +399,8 @@ export default function App() {
   const setSelectedModelId = useChatStore((s) => s.setSelectedModelId);
   const setLive = useChatStore((s) => s.setLive);
   const respondToApproval = useChatStore((s) => s.respondToApproval);
+  const lairWorkspace = useLair((s) => s.workspace);
+  const setLairWorkspace = useLair((s) => s.setWorkspace);
 
   useEffect(() => {
     if (activeSessionId) firePendingReviewForSession(activeSessionId);
@@ -634,7 +640,7 @@ export default function App() {
     [closeTab],
   );
 
-  // Drives session disposal off the pane tree, not React lifecycles —
+  // Drives session disposal off the pane tree, not React lifecycles:
   // split/unsplit re-mount components but the leaf is still live.
   const liveLeavesRef = useRef<Set<number>>(new Set());
   useEffect(() => {
@@ -722,7 +728,7 @@ export default function App() {
         return;
       }
       // Dispatch a window event the composer listens for. Same pattern as
-      // selections — keeps file-explorer decoupled from the AI module.
+      // selections, keeping file-explorer decoupled from the AI module.
       window.dispatchEvent(
         new CustomEvent<string>("terax:ai-attach-file", { detail: path }),
       );
@@ -945,6 +951,13 @@ export default function App() {
     ? sourceControlContextPath
     : badgeContextPath;
   const sourceControl = useSourceControl(sourceControlPath, true);
+  const lairWorkspaceCandidate =
+    sourceControlContextPath ?? activeTerminalLeafCwd ?? null;
+
+  useEffect(() => {
+    const next = resolveLairWorkspace(lairWorkspace, lairWorkspaceCandidate);
+    if (next && next !== lairWorkspace) setLairWorkspace(next);
+  }, [lairWorkspace, lairWorkspaceCandidate, setLairWorkspace]);
 
   const toggleSourceControl = useCallback(() => {
     cycleSidebarView("source-control");
@@ -1472,7 +1485,11 @@ export default function App() {
                       className="overflow-hidden"
                       aria-hidden={!panelOpen}
                     >
-                      {hasComposer ? (
+                      {USE_LAIR_CHAT ? (
+                        <div className="h-[min(42vh,380px)] min-h-64">
+                          <LairChat />
+                        </div>
+                      ) : hasComposer ? (
                         <AiInputBar />
                       ) : (
                         <AiInputBarConnect
