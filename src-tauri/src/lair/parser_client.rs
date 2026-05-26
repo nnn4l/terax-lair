@@ -1,5 +1,9 @@
 use serde::{Deserialize, Serialize};
 
+use crate::lair::keychain::get_openrouter_key;
+use crate::lair::orchestrator::LairConfig;
+use crate::lair::types::{CompletionOutcome, RawQueueNode, SectionDiff};
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ModelInfo {
     pub id: String,
@@ -172,7 +176,7 @@ pub async fn route_agent(req: RouteRequest) -> Result<RouteResult, String> {
 (no markdown, no code fences, no prose before or after): \
 {\"agent\": \"claude\" or \"codex\", \"reason\": \"short why\"}. \
 Heuristic: Claude for planning/thinking/ambiguity; Codex for concrete edits. \
-Phase weights: brainstorm/plan/review -> Claude; implement/refactor/test -> Codex.";
+Phase weights: plan/review -> Claude; implement/refactor/test -> Codex.";
     let user = format!("Phase: {}\nPrompt: {}", req.phase, req.prompt);
     let body = ChatRequest {
         model: req.model,
@@ -203,6 +207,30 @@ fn extract_json(s: &str) -> String {
     let trimmed = s.trim();
     let start = trimmed.find('{');
     let end = trimmed.rfind('}');
+    match (start, end) {
+        (Some(a), Some(b)) if b >= a => trimmed[a..=b].to_string(),
+        _ => trimmed.to_string(),
+    }
+}
+
+fn extract_json_value(s: &str) -> String {
+    let trimmed = s.trim();
+    let obj_start = trimmed.find('{');
+    let arr_start = trimmed.find('[');
+    let start = match (obj_start, arr_start) {
+        (Some(a), Some(b)) => Some(a.min(b)),
+        (Some(a), None) => Some(a),
+        (None, Some(b)) => Some(b),
+        (None, None) => None,
+    };
+    let obj_end = trimmed.rfind('}');
+    let arr_end = trimmed.rfind(']');
+    let end = match (obj_end, arr_end) {
+        (Some(a), Some(b)) => Some(a.max(b)),
+        (Some(a), None) => Some(a),
+        (None, Some(b)) => Some(b),
+        (None, None) => None,
+    };
     match (start, end) {
         (Some(a), Some(b)) if b >= a => trimmed[a..=b].to_string(),
         _ => trimmed.to_string(),
@@ -261,4 +289,111 @@ async fn call(api_key: &str, body: &ChatRequest) -> Result<String, String> {
         .ok_or("no choices")?
         .message
         .content)
+}
+
+pub async fn compress_spec(markdown: &str, cfg: &LairConfig) -> Result<Vec<RawQueueNode>, String> {
+    let api_key = get_openrouter_key()?;
+    let system = "Convert markdown implementation plan into a JSON array of tasks. \
+Return only valid JSON. Format: \
+[{\"label\":\"task name\",\"context\":\"full step body verbatim\",\
+\"source_anchor\":\"## Heading text or null\",\"agent_hint\":\"claude or codex or null\",\
+\"children\":[...]}]. \
+Rules: each markdown heading is a parent task. Each step under a heading is a leaf child. \
+Use a flat two-level tree. Use codex for edits and tests. Use claude for design, planning, review, and refactor.";
+    let body = ChatRequest {
+        model: cfg.openrouter_model.clone(),
+        max_tokens: None,
+        messages: vec![
+            ChatMessage { role: "system".into(), content: system.into() },
+            ChatMessage { role: "user".into(), content: markdown.to_string() },
+        ],
+        response_format: serde_json::json!({"type": "json_object"}),
+    };
+    let raw = call(&api_key, &body).await?;
+    let cleaned = extract_json_value(&raw);
+    let nodes: Vec<RawQueueNode> = if cleaned.trim_start().starts_with('[') {
+        serde_json::from_str(&cleaned)
+    } else {
+        let obj: serde_json::Value =
+            serde_json::from_str(&cleaned).map_err(|e| format!("parse outer: {e}"))?;
+        serde_json::from_value(
+            obj.get("tasks")
+                .cloned()
+                .or_else(|| obj.get("items").cloned())
+                .unwrap_or_else(|| serde_json::json!([])),
+        )
+    }
+    .map_err(|e| format!("parse compress_spec: {e}; raw: {raw}"))?;
+    Ok(nodes)
+}
+
+pub async fn diff_spec_sections(
+    old: &str,
+    new: &str,
+    cfg: &LairConfig,
+) -> Result<Vec<SectionDiff>, String> {
+    let api_key = get_openrouter_key()?;
+    let system = "Compare two markdown spec versions section by section. \
+Return only JSON. Format: \
+[{\"anchor\":\"## Section name\",\"old_text\":\"...\",\"new_text\":\"...\",\
+\"summary\":\"one sentence diff\"}]. \
+Only include changed sections. Return an empty array when nothing changed.";
+    let user = format!("OLD:\n{old}\n\nNEW:\n{new}");
+    let body = ChatRequest {
+        model: cfg.openrouter_model.clone(),
+        max_tokens: None,
+        messages: vec![
+            ChatMessage { role: "system".into(), content: system.into() },
+            ChatMessage { role: "user".into(), content: user },
+        ],
+        response_format: serde_json::json!({"type": "json_object"}),
+    };
+    let raw = call(&api_key, &body).await?;
+    let cleaned = extract_json_value(&raw);
+    let diffs: Vec<SectionDiff> = if cleaned.trim_start().starts_with('[') {
+        serde_json::from_str(&cleaned)
+    } else {
+        let obj: serde_json::Value =
+            serde_json::from_str(&cleaned).map_err(|e| format!("parse outer: {e}"))?;
+        serde_json::from_value(
+            obj.get("sections")
+                .cloned()
+                .or_else(|| obj.get("diffs").cloned())
+                .unwrap_or_else(|| serde_json::json!([])),
+        )
+    }
+    .map_err(|e| format!("parse diff_spec_sections: {e}; raw: {raw}"))?;
+    Ok(diffs)
+}
+
+pub async fn judge_outcome(card_output: &str, cfg: &LairConfig) -> Result<CompletionOutcome, String> {
+    let api_key = get_openrouter_key()?;
+    let system = "Classify agent output. Return only JSON: \
+{\"outcome\":\"done or needs_review or failed\",\"reason\":\"short why\"}. \
+done means completed successfully. needs_review means partial, ambiguous, or warnings present. \
+failed means errors, crashes, or explicit failure.";
+    let tail_rev: String = card_output.chars().rev().take(2000).collect();
+    let tail: String = tail_rev.chars().rev().collect();
+    let body = ChatRequest {
+        model: cfg.openrouter_model.clone(),
+        max_tokens: None,
+        messages: vec![
+            ChatMessage { role: "system".into(), content: system.into() },
+            ChatMessage { role: "user".into(), content: tail },
+        ],
+        response_format: serde_json::json!({"type": "json_object"}),
+    };
+    let raw = call(&api_key, &body).await?;
+    let cleaned = extract_json(&raw);
+    #[derive(Deserialize)]
+    struct Resp {
+        outcome: String,
+    }
+    let resp: Resp =
+        serde_json::from_str(&cleaned).map_err(|e| format!("parse judge_outcome: {e}; raw: {raw}"))?;
+    Ok(match resp.outcome.as_str() {
+        "done" => CompletionOutcome::Done,
+        "failed" => CompletionOutcome::Failed,
+        _ => CompletionOutcome::NeedsReview,
+    })
 }

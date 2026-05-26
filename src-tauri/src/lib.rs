@@ -3,8 +3,11 @@ mod modules;
 
 use lair::checklist::ChecklistWatcher;
 use lair::orchestrator::{
-    lair_append_checklist_item, lair_delete_checklist_item, lair_list_models, lair_read_checklist,
-    lair_send_message, lair_toggle_checklist_item, lair_watch_checklist, LairConfig,
+    lair_append_checklist_item, lair_delete_checklist_item, lair_import_spec, lair_list_models,
+    lair_list_specs, lair_paste_spec, lair_queue_check_stale, lair_queue_get, lair_queue_pause,
+    lair_queue_pin, lair_queue_resync, lair_queue_resume, lair_queue_set_autopilot,
+    lair_queue_skip, lair_queue_unpin, lair_read_checklist, lair_send_message,
+    lair_toggle_checklist_item, lair_watch_checklist, LairConfig, LairState,
 };
 use lair::worktree::lair_list_worktrees;
 use modules::{agent, fs, git, net, pty, secrets, shell, workspace};
@@ -120,6 +123,7 @@ pub fn run() {
         )
         .plugin(tauri_plugin_opener::init())
         .manage(lair_config)
+        .manage(LairState::new())
         .manage(ChecklistWatcher::default())
         .manage(pty::PtyState::default())
         .manage(shell::ShellState::default())
@@ -198,6 +202,18 @@ pub fn run() {
             net::ai_http_request,
             net::ai_http_stream,
             lair_send_message,
+            lair_import_spec,
+            lair_paste_spec,
+            lair_list_specs,
+            lair_queue_pause,
+            lair_queue_resume,
+            lair_queue_skip,
+            lair_queue_pin,
+            lair_queue_unpin,
+            lair_queue_get,
+            lair_queue_set_autopilot,
+            lair_queue_check_stale,
+            lair_queue_resync,
             lair_list_worktrees,
             lair_read_checklist,
             lair_append_checklist_item,

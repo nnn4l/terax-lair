@@ -19,7 +19,6 @@ describe("LairChat components", () => {
   test("phase picker renders every Lair phase", () => {
     const html = renderToStaticMarkup(<PhaseDropdown />);
     for (const phase of [
-      "brainstorm",
       "plan",
       "implement",
       "refactor",

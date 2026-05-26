@@ -49,11 +49,14 @@ import {
 import { getLaunchDir } from "@/lib/launchDir";
 import { quoteShellArg } from "@/lib/shellQuote";
 import { useZoom } from "@/lib/useZoom";
+import { sendMessage } from "@/lair/api";
 import { LairFloatingSidebar } from "@/lair/components/LairFloatingSidebar";
+import { QueuePanel } from "@/lair/components/QueuePanel";
+import { SpecImportModal } from "@/lair/components/SpecImportModal";
 import { useLair } from "@/lair/state";
+import type { QueueItem } from "@/lair/types";
 import { resolveLairWorkspace } from "@/lair/workspace";
 import { FileExplorer, type FileExplorerHandle } from "@/modules/explorer";
-import { ChecklistPanel } from "@/lair/components/ChecklistPanel";
 import {
   listenFsChanged,
   parentDir,
@@ -403,6 +406,7 @@ export default function App() {
   const respondToApproval = useChatStore((s) => s.respondToApproval);
   const lairWorkspace = useLair((s) => s.workspace);
   const setLairWorkspace = useLair((s) => s.setWorkspace);
+  const [specImportOpen, setSpecImportOpen] = useState(false);
 
   useEffect(() => {
     if (activeSessionId) firePendingReviewForSession(activeSessionId);
@@ -962,6 +966,30 @@ export default function App() {
     if (next && next !== lairWorkspace) setLairWorkspace(next);
   }, [lairWorkspace, lairWorkspaceCandidate, setLairWorkspace]);
 
+  const sendQueueItem = useCallback((item: QueueItem) => {
+    const state = useLair.getState();
+    if (!state.workspace) return;
+    if (!state.activeSessionId) state.newSession();
+    const prompt = "Execute this task.";
+    const turnId = state.startTurn(prompt);
+    void sendMessage({
+      turn_id: turnId,
+      prompt,
+      agent_choice: item.agent_hint ?? state.agentChoice,
+      phase: state.phase,
+      workspace: state.workspace,
+      task_context: {
+        item_id: item.id,
+        label: item.label,
+        context: item.context,
+      },
+      claude_model: state.claudeModel,
+      codex_model: state.codexModel,
+      claude_effort: state.claudeEffort,
+      codex_effort: state.codexEffort,
+    }).then((ids) => state.attachCardIds(turnId, ids));
+  }, []);
+
   const toggleSourceControl = useCallback(() => {
     cycleSidebarView("source-control");
   }, [cycleSidebarView]);
@@ -1444,7 +1472,10 @@ export default function App() {
                   <div className="flex min-h-0 flex-1 flex-col">
                     {sidebarView === "explorer" ? (
                       <>
-                        <ChecklistPanel />
+                        <QueuePanel
+                          onImportClick={() => setSpecImportOpen(true)}
+                          onSendItem={sendQueueItem}
+                        />
                         <div className="min-h-0 flex-1">
                           <FileExplorer
                             ref={explorerRef}
@@ -1573,6 +1604,11 @@ export default function App() {
           />
 
           <UpdaterDialog />
+          <SpecImportModal
+            open={specImportOpen}
+            onClose={() => setSpecImportOpen(false)}
+            workspace={lairWorkspace}
+          />
 
           <AlertDialog
             open={pendingCloseTab !== null}

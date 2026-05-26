@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-const DEFAULT_SCAFFOLD: &str = "## Now\n\n## Next\n\n## Later\n\n## Done\n";
+const DEFAULT_SCAFFOLD: &str = "## Queue\n\n## Done\n";
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct Item {
@@ -14,18 +14,14 @@ pub struct Item {
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ChecklistData {
-    pub now: Vec<Item>,
-    pub next: Vec<Item>,
-    pub later: Vec<Item>,
+    pub queue: Vec<Item>,
     pub done: Vec<Item>,
 }
 
 #[derive(serde::Deserialize, Debug, Clone, PartialEq)]
 #[serde(rename_all = "lowercase")]
 pub enum Section {
-    Now,
-    Next,
-    Later,
+    Queue,
     Done,
 }
 
@@ -48,7 +44,14 @@ pub fn read_checklist(workspace: &str) -> Result<ChecklistData, String> {
     } else {
         DEFAULT_SCAFFOLD.to_string()
     };
-    Ok(parse_checklist(&raw))
+    let content = migrate_legacy_format(&raw);
+    if content != raw {
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent).map_err(|e| format!("mkdir .lair: {e}"))?;
+        }
+        std::fs::write(&path, &content).map_err(|e| format!("write migrated checklist: {e}"))?;
+    }
+    Ok(parse_checklist(&content))
 }
 
 pub fn append_item(workspace: &str, section: &Section, text: &str) -> Result<(), String> {
@@ -61,6 +64,7 @@ pub fn append_item(workspace: &str, section: &Section, text: &str) -> Result<(),
     } else {
         DEFAULT_SCAFFOLD.to_string()
     };
+    let raw = migrate_legacy_format(&raw);
     let updated = insert_item(&raw, section, text);
     std::fs::write(&path, &updated).map_err(|e| format!("write: {e}"))
 }
@@ -150,28 +154,22 @@ where
 // ---- parsing helpers ----
 
 #[derive(PartialEq)]
-enum CurrentSection { None, Now, Next, Later, Done }
+enum CurrentSection { None, Queue, Done }
 
 fn parse_checklist(raw: &str) -> ChecklistData {
-    let mut now = Vec::new();
-    let mut next = Vec::new();
-    let mut later = Vec::new();
+    let mut queue = Vec::new();
     let mut done = Vec::new();
     let mut current = CurrentSection::None;
 
     for (idx, line) in raw.lines().enumerate() {
         let trimmed = line.trim();
         match trimmed {
-            "## Now" => current = CurrentSection::Now,
-            "## Next" => current = CurrentSection::Next,
-            "## Later" => current = CurrentSection::Later,
+            "## Queue" => current = CurrentSection::Queue,
             "## Done" => current = CurrentSection::Done,
             _ => {
                 if let Some(item) = parse_item(trimmed, idx) {
                     match current {
-                        CurrentSection::Now => now.push(item),
-                        CurrentSection::Next => next.push(item),
-                        CurrentSection::Later => later.push(item),
+                        CurrentSection::Queue => queue.push(item),
                         CurrentSection::Done => done.push(item),
                         CurrentSection::None => {}
                     }
@@ -179,7 +177,7 @@ fn parse_checklist(raw: &str) -> ChecklistData {
             }
         }
     }
-    ChecklistData { now, next, later, done }
+    ChecklistData { queue, done }
 }
 
 fn parse_item(line: &str, idx: usize) -> Option<Item> {
@@ -194,9 +192,7 @@ fn parse_item(line: &str, idx: usize) -> Option<Item> {
 
 fn section_header(section: &Section) -> &'static str {
     match section {
-        Section::Now => "## Now",
-        Section::Next => "## Next",
-        Section::Later => "## Later",
+        Section::Queue => "## Queue",
         Section::Done => "## Done",
     }
 }
@@ -220,6 +216,46 @@ fn insert_item(raw: &str, section: &Section, text: &str) -> String {
     }
 }
 
+fn migrate_legacy_format(content: &str) -> String {
+    if !content.contains("## Now")
+        && !content.contains("## Next")
+        && !content.contains("## Later")
+    {
+        return content.to_string();
+    }
+    let queue_items: Vec<String> = ["Now", "Next", "Later"]
+        .iter()
+        .flat_map(|section| extract_section_items(content, section))
+        .collect();
+    let done_items = extract_section_items(content, "Done");
+    format!(
+        "## Queue\n\n{}\n\n## Done\n\n{}\n",
+        queue_items.join("\n"),
+        done_items.join("\n")
+    )
+}
+
+fn extract_section_items(content: &str, heading: &str) -> Vec<String> {
+    let target = format!("## {heading}");
+    let mut in_section = false;
+    let mut items = Vec::new();
+    for line in content.lines() {
+        if line == target {
+            in_section = true;
+            continue;
+        }
+        if in_section {
+            if line.starts_with("## ") {
+                break;
+            }
+            if line.starts_with("- ") {
+                items.push(line.to_string());
+            }
+        }
+    }
+    items
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -240,20 +276,18 @@ mod tests {
 
     #[test]
     fn round_trip_parse() {
-        let data = parse_checklist(SAMPLE);
-        assert_eq!(data.now.len(), 2);
-        assert!(!data.now[0].checked);
-        assert!(data.now[1].checked);
-        assert_eq!(data.next.len(), 1);
-        assert_eq!(data.later.len(), 0);
+        let data = parse_checklist(&migrate_legacy_format(SAMPLE));
+        assert_eq!(data.queue.len(), 3);
+        assert!(!data.queue[0].checked);
+        assert!(data.queue[1].checked);
         assert_eq!(data.done.len(), 1);
     }
 
     #[test]
-    fn insert_into_now() {
-        let updated = insert_item(SAMPLE, &Section::Now, "new task");
+    fn insert_into_queue() {
+        let updated = insert_item(DEFAULT_SCAFFOLD, &Section::Queue, "new task");
         let data = parse_checklist(&updated);
-        assert!(data.now.iter().any(|i| i.text == "new task"));
+        assert!(data.queue.iter().any(|i| i.text == "new task"));
     }
 
     #[test]
@@ -266,7 +300,7 @@ mod tests {
         // Find the "fix login bug" line (it's at index 1 in SAMPLE)
         let before = read_checklist(ws).unwrap();
         let target = before
-            .now
+            .queue
             .iter()
             .find(|i| i.text == "fix login bug")
             .unwrap()
@@ -275,9 +309,8 @@ mod tests {
         delete_item(ws, target.line).unwrap();
 
         let after = read_checklist(ws).unwrap();
-        assert!(!after.now.iter().any(|i| i.text == "fix login bug"));
-        // "update deps" remains
-        assert!(after.now.iter().any(|i| i.text == "update deps"));
+        assert!(!after.queue.iter().any(|i| i.text == "fix login bug"));
+        assert!(after.queue.iter().any(|i| i.text == "update deps"));
     }
 
     #[test]
@@ -293,7 +326,14 @@ mod tests {
     #[test]
     fn scaffold_on_empty() {
         let data = parse_checklist(DEFAULT_SCAFFOLD);
-        assert_eq!(data.now.len(), 0);
-        assert_eq!(data.next.len(), 0);
+        assert_eq!(data.queue.len(), 0);
+    }
+
+    #[test]
+    fn migrates_legacy_sections() {
+        let migrated = migrate_legacy_format(SAMPLE);
+        let data = parse_checklist(&migrated);
+        assert_eq!(data.queue.len(), 3);
+        assert_eq!(data.done.len(), 1);
     }
 }

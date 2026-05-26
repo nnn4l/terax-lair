@@ -6,7 +6,7 @@ import { useLair } from "@/lair/state";
 import type { CardData, ChecklistSection } from "@/lair/types";
 import { UsageBadge } from "@/lair/components/UsageBadge";
 
-const SECTIONS: ChecklistSection[] = ["now", "next", "later"];
+const SECTIONS: ChecklistSection[] = ["queue", "done"];
 
 export function Card({ card }: { card: CardData }) {
   const [expanded, setExpanded] = useState(false);
@@ -81,7 +81,7 @@ export function Card({ card }: { card: CardData }) {
               className="text-[11px] font-medium text-muted-foreground hover:text-primary"
               onClick={() => setAddingToChecklist((v) => !v)}
             >
-              {addingToChecklist ? "cancel" : "→ checklist"}
+              {addingToChecklist ? "cancel" : "to checklist"}
             </button>
           </div>
           {addingToChecklist ? (

@@ -6,7 +6,11 @@ import type {
   ChecklistSection,
   ModelInfo,
   NarrationEvent,
+  AutopilotMode,
+  QueueEvent,
+  QueueItem,
   SendMessageRequest,
+  StaleReport,
   StreamChunkEvent,
   Worktree,
 } from "@/lair/types";
@@ -83,4 +87,74 @@ export async function onChecklistChanged(cb: () => void): Promise<UnlistenFn> {
 
 export async function listModels(): Promise<ModelInfo[]> {
   return await invoke<ModelInfo[]>("lair_list_models");
+}
+
+export async function importSpec(
+  workspace: string,
+  path: string,
+): Promise<QueueItem[]> {
+  return await invoke<QueueItem[]>("lair_import_spec", { workspace, path });
+}
+
+export async function pasteSpec(
+  workspace: string,
+  markdown: string,
+): Promise<QueueItem[]> {
+  return await invoke<QueueItem[]>("lair_paste_spec", { workspace, markdown });
+}
+
+export async function listSpecs(workspace: string): Promise<string[]> {
+  return await invoke<string[]>("lair_list_specs", { workspace });
+}
+
+export async function queuePause(): Promise<void> {
+  await invoke("lair_queue_pause");
+}
+
+export async function queueResume(): Promise<void> {
+  await invoke("lair_queue_resume");
+}
+
+export async function queueSkip(): Promise<void> {
+  await invoke("lair_queue_skip");
+}
+
+export async function queuePin(itemId: string): Promise<void> {
+  await invoke("lair_queue_pin", { itemId });
+}
+
+export async function queueUnpin(): Promise<void> {
+  await invoke("lair_queue_unpin");
+}
+
+export async function queueGet(): Promise<QueueItem[] | null> {
+  return await invoke<QueueItem[] | null>("lair_queue_get");
+}
+
+export async function queueSetAutopilot(mode: AutopilotMode): Promise<void> {
+  await invoke("lair_queue_set_autopilot", { mode });
+}
+
+export async function queueResync(acceptedIds: string[]): Promise<void> {
+  await invoke("lair_queue_resync", { acceptedIds });
+}
+
+export async function queueCheckStale(): Promise<StaleReport[]> {
+  return await invoke<StaleReport[]>("lair_queue_check_stale");
+}
+
+export async function onQueueEvent(
+  cb: (event: QueueEvent) => void,
+): Promise<UnlistenFn> {
+  return await listen<QueueEvent>("lair-queue-event", (event) =>
+    cb(event.payload),
+  );
+}
+
+export async function onSpecChanged(
+  cb: (file: string) => void,
+): Promise<UnlistenFn> {
+  return await listen<string>("lair-spec-changed", (event) =>
+    cb(event.payload),
+  );
 }

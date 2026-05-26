@@ -2,11 +2,6 @@ use crate::lair::types::{Agent, Phase};
 
 pub fn system_prompt_for(phase: &Phase, agent: &Agent) -> String {
     match (phase, agent) {
-        (Phase::Brainstorm, _) => {
-            "You are in BRAINSTORM phase. Ask questions. Propose options. \
-Do not write code. Do not edit files. Surface tradeoffs and unknowns."
-                .into()
-        }
         (Phase::Plan, _) => {
             "You are in PLAN phase. Produce a numbered implementation plan \
 with clearly scoped tasks. No code yet. Flag all unknowns and risks before writing anything."
@@ -57,7 +52,6 @@ mod tests {
     #[test]
     fn all_combinations_non_empty() {
         for phase in [
-            Phase::Brainstorm,
             Phase::Plan,
             Phase::Implement,
             Phase::Refactor,
@@ -69,12 +63,6 @@ mod tests {
                 assert!(!prompt.is_empty(), "empty prompt for {phase:?} + {agent:?}");
             }
         }
-    }
-
-    #[test]
-    fn brainstorm_forbids_code() {
-        let p = system_prompt_for(&Phase::Brainstorm, &Agent::Claude);
-        assert!(p.contains("Do not write code"));
     }
 
     #[test]

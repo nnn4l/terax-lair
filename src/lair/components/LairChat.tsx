@@ -1,11 +1,22 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { sendMessage, onCardUpdate, onStreamChunk, onNarration } from "@/lair/api";
+import {
+  sendMessage,
+  onCardUpdate,
+  onStreamChunk,
+  onNarration,
+  onQueueEvent,
+  onSpecChanged,
+  queueCheckStale,
+  queueGet,
+  queueUnpin,
+} from "@/lair/api";
 import { useLair } from "@/lair/state";
 import { AgentDropdown } from "@/lair/components/AgentDropdown";
 import { Card } from "@/lair/components/Card";
 import { ModelDropdown } from "@/lair/components/ModelDropdown";
 import { NarrationLine } from "@/lair/components/NarrationLine";
 import { PhaseDropdown } from "@/lair/components/PhaseDropdown";
+import { StaleSpecCard } from "@/lair/components/StaleSpecCard";
 import {
   Add01Icon,
   ArrowDown01Icon,
@@ -15,7 +26,12 @@ import {
   Refresh01Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import type { CardData, NarrationLine as NarrationData, Turn } from "@/lair/types";
+import type {
+  CardData,
+  NarrationLine as NarrationData,
+  QueueItem,
+  Turn,
+} from "@/lair/types";
 
 export function LairChat({ onClose }: { onClose?: () => void }) {
   const cards = useLair((state) => state.cards);
@@ -26,6 +42,10 @@ export function LairChat({ onClose }: { onClose?: () => void }) {
   const upsertCard = useLair((state) => state.upsertCard);
   const appendChunk = useLair((state) => state.appendChunk);
   const addNarration = useLair((state) => state.addNarration);
+  const setQueue = useLair((state) => state.setQueue);
+  const setCursor = useLair((state) => state.setCursor);
+  const setAutopilotPaused = useLair((state) => state.setAutopilotPaused);
+  const setStaleReports = useLair((state) => state.setStaleReports);
   const newSession = useLair((state) => state.newSession);
   const switchSession = useLair((state) => state.switchSession);
   const deleteSession = useLair((state) => state.deleteSession);
@@ -38,6 +58,10 @@ export function LairChat({ onClose }: { onClose?: () => void }) {
   const codexModel = useLair((s) => s.codexModel);
   const claudeEffort = useLair((s) => s.claudeEffort);
   const codexEffort = useLair((s) => s.codexEffort);
+  const queue = useLair((s) => s.queue);
+  const cursor = useLair((s) => s.cursor);
+  const staleReports = useLair((s) => s.staleReports);
+  const staleSpecFile = useLair((s) => s.staleSpecFile);
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<{ message: string; prompt: string } | null>(null);
@@ -45,6 +69,11 @@ export function LairChat({ onClose }: { onClose?: () => void }) {
   const composerRef = useRef<HTMLTextAreaElement | null>(null);
   const stickToBottomRef = useRef(true);
   const canSend = text.trim().length > 0 && !sending;
+  const currentItem = useMemo(
+    () => (cursor.itemId ? findQueueItem(queue, cursor.itemId) : null),
+    [cursor.itemId, queue],
+  );
+  const autopilotDispatchingRef = useRef(false);
 
   useEffect(() => {
     const cardUpdate = onCardUpdate((event) =>
@@ -60,6 +89,48 @@ export function LairChat({ onClose }: { onClose?: () => void }) {
       void narrationSub.then((unlisten) => unlisten());
     };
   }, [appendChunk, upsertCard, addNarration]);
+
+  useEffect(() => {
+    const queueEvents = onQueueEvent((event) => {
+      if (event.type === "cursor_advanced") {
+        setCursor(event.to ?? null);
+        if (event.to) {
+          const state = useLair.getState();
+          if (state.autopilot.mode !== "off" && !state.autopilot.paused) {
+            const nextItem = findQueueItem(state.queue, event.to);
+            if (nextItem && !autopilotDispatchingRef.current) {
+              autopilotDispatchingRef.current = true;
+              void dispatchQueueItem(nextItem).finally(() => {
+                autopilotDispatchingRef.current = false;
+              });
+            }
+          }
+        }
+      } else if (event.type === "item_completed") {
+        void queueGet().then((items) => {
+          if (items) setQueue(items);
+        });
+      } else if (event.type === "paused" || event.type === "blocked_awaiting_approval") {
+        setAutopilotPaused(true);
+      } else if (event.type === "resumed") {
+        setAutopilotPaused(false);
+      }
+    });
+    const specChanges = onSpecChanged((file) => {
+      void queueCheckStale()
+        .then((reports) => {
+          setStaleReports(reports, file);
+          return queueGet();
+        })
+        .then((items) => {
+          if (items) setQueue(items);
+        });
+    });
+    return () => {
+      void queueEvents.then((unlisten) => unlisten());
+      void specChanges.then((unlisten) => unlisten());
+    };
+  }, [setAutopilotPaused, setCursor, setQueue, setStaleReports]);
 
 
   // Lookup maps
@@ -122,6 +193,13 @@ export function LairChat({ onClose }: { onClose?: () => void }) {
         agent_choice: agentChoice,
         phase,
         workspace,
+        task_context: currentItem
+          ? {
+              item_id: currentItem.id,
+              label: currentItem.label,
+              context: currentItem.context,
+            }
+          : undefined,
         claude_model: claudeModel,
         codex_model: codexModel,
         claude_effort: claudeEffort,
@@ -140,6 +218,41 @@ export function LairChat({ onClose }: { onClose?: () => void }) {
 
   function submit() {
     void submitPrompt(text.trim());
+  }
+
+  async function dispatchQueueItem(item: QueueItem) {
+    const state = useLair.getState();
+    if (!state.workspace) {
+      setError({ message: "Set a workspace first.", prompt: "Execute this task." });
+      return;
+    }
+    if (!state.activeSessionId) state.newSession();
+    const prompt = "Execute this task.";
+    const turnId = state.startTurn(prompt);
+    try {
+      const ids = await sendMessage({
+        turn_id: turnId,
+        prompt,
+        agent_choice: item.agent_hint ?? state.agentChoice,
+        phase: state.phase,
+        workspace: state.workspace,
+        task_context: {
+          item_id: item.id,
+          label: item.label,
+          context: item.context,
+        },
+        claude_model: state.claudeModel,
+        codex_model: state.codexModel,
+        claude_effort: state.claudeEffort,
+        codex_effort: state.codexEffort,
+      });
+      state.attachCardIds(turnId, ids);
+    } catch (err) {
+      setError({
+        message: err instanceof Error ? err.message : String(err),
+        prompt,
+      });
+    }
   }
 
   function editPrompt(prompt: string) {
@@ -188,6 +301,25 @@ export function LairChat({ onClose }: { onClose?: () => void }) {
         </div>
       </div>
 
+      {currentItem ? (
+        <div className="relative flex min-h-8 shrink-0 items-center gap-2 border-b border-border/50 bg-muted/20 px-3 text-[11px]">
+          <span className="shrink-0 text-muted-foreground">Now:</span>
+          <span className="min-w-0 flex-1 truncate font-medium">{currentItem.label}</span>
+          {cursor.pinned ? (
+            <button
+              type="button"
+              onClick={() => {
+                void queueUnpin();
+                setCursor(cursor.itemId, false);
+              }}
+              className="shrink-0 rounded px-1.5 py-0.5 text-amber-500 hover:bg-muted"
+            >
+              unpin
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+
       <div
         ref={threadRef}
         onScroll={handleThreadScroll}
@@ -196,6 +328,9 @@ export function LairChat({ onClose }: { onClose?: () => void }) {
       >
         {isEmpty ? (
           <div className="flex min-h-full flex-col">
+            {staleReports.length > 0 && staleSpecFile ? (
+              <StaleSpecCard reports={staleReports} specFile={staleSpecFile} />
+            ) : null}
             <div className="min-h-0 flex-1">
               <EmptyState onPick={setText} />
             </div>
@@ -208,6 +343,9 @@ export function LairChat({ onClose }: { onClose?: () => void }) {
           </div>
         ) : (
           <div className="flex flex-col gap-3 pb-4">
+            {staleReports.length > 0 && staleSpecFile ? (
+              <StaleSpecCard reports={staleReports} specFile={staleSpecFile} />
+            ) : null}
             {turns.map((turn) => (
               <TurnView
                 key={turn.id}
@@ -513,6 +651,15 @@ async function copyTurnResponse(cards: CardData[]) {
     .join("\n\n---\n\n");
   if (!text || !navigator?.clipboard?.writeText) return;
   await navigator.clipboard.writeText(text);
+}
+
+function findQueueItem(items: QueueItem[], id: string): QueueItem | null {
+  for (const item of items) {
+    if (item.id === id) return item;
+    const found = findQueueItem(item.children, id);
+    if (found) return found;
+  }
+  return null;
 }
 
 function ModelRow({

@@ -4,9 +4,12 @@ import type {
   AgentChoice,
   CardData,
   ChecklistData,
+  AutopilotMode,
   ModelInfo,
   NarrationLine,
   Phase,
+  QueueItem,
+  StaleReport,
   Turn,
   LairSession,
 } from "@/lair/types";
@@ -26,6 +29,15 @@ interface LairState {
   claudeEffort: string | null;
   codexEffort: string | null;
   checklist: ChecklistData | null;
+  queue: QueueItem[];
+  cursor: { itemId: string | null; pinned: boolean };
+  autopilot: {
+    mode: AutopilotMode;
+    paused: boolean;
+    stopOnFailure: boolean;
+  };
+  staleReports: StaleReport[];
+  staleSpecFile: string | null;
   models: ModelInfo[];
   modelsFetchedAt: number;
 
@@ -41,6 +53,12 @@ interface LairState {
   setCodexEffort: (effort: string | null) => void;
   addNarration: (line: NarrationLine) => void;
   setChecklist: (data: ChecklistData) => void;
+  setQueue: (queue: QueueItem[]) => void;
+  setCursor: (itemId: string | null, pinned?: boolean) => void;
+  setAutopilotMode: (mode: AutopilotMode) => void;
+  setAutopilotPaused: (paused: boolean) => void;
+  setStopOnFailure: (stopOnFailure: boolean) => void;
+  setStaleReports: (reports: StaleReport[], specFile?: string | null) => void;
   setModels: (models: ModelInfo[]) => void;
   newSession: (title?: string) => string;
   switchSession: (id: string) => void;
@@ -89,6 +107,11 @@ export const useLair = create<LairState>()(
       claudeEffort: null,
       codexEffort: null,
       checklist: null,
+      queue: [],
+      cursor: { itemId: null, pinned: false },
+      autopilot: { mode: "task", paused: false, stopOnFailure: true },
+      staleReports: [],
+      staleSpecFile: null,
       models: [],
       modelsFetchedAt: 0,
 
@@ -204,6 +227,21 @@ export const useLair = create<LairState>()(
           return { narrations, turns, sessions };
         }),
       setChecklist: (checklist) => set({ checklist }),
+      setQueue: (queue) => set({ queue }),
+      setCursor: (itemId, pinned) =>
+        set((state) => ({
+          cursor: { itemId, pinned: pinned ?? state.cursor.pinned },
+        })),
+      setAutopilotMode: (mode) =>
+        set((state) => ({ autopilot: { ...state.autopilot, mode } })),
+      setAutopilotPaused: (paused) =>
+        set((state) => ({ autopilot: { ...state.autopilot, paused } })),
+      setStopOnFailure: (stopOnFailure) =>
+        set((state) => ({
+          autopilot: { ...state.autopilot, stopOnFailure },
+        })),
+      setStaleReports: (staleReports, staleSpecFile = null) =>
+        set({ staleReports, staleSpecFile }),
       setModels: (models) =>
         set({ models, modelsFetchedAt: Date.now() }),
       newSession: (title) => {

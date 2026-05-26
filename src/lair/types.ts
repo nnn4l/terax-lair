@@ -1,14 +1,8 @@
 export type Agent = "claude" | "codex";
 export type AgentChoice = "claude" | "codex" | "compare" | "auto";
-export type Phase =
-  | "brainstorm"
-  | "plan"
-  | "implement"
-  | "refactor"
-  | "test"
-  | "review";
+export type Phase = "plan" | "implement" | "refactor" | "test" | "review";
 export type CardStatus = "streaming" | "summarizing" | "done" | "failed";
-export type ChecklistSection = "now" | "next" | "later" | "done";
+export type ChecklistSection = "queue" | "done";
 
 export interface Usage {
   tokens_in: number;
@@ -35,6 +29,7 @@ export interface SendMessageRequest {
   agent_choice: AgentChoice;
   phase: Phase;
   workspace: string;
+  task_context?: QueueContext;
   claude_model: string | null;
   codex_model: string | null;
   claude_effort: string | null;
@@ -68,10 +63,48 @@ export interface ChecklistItem {
 }
 
 export interface ChecklistData {
-  now: ChecklistItem[];
-  next: ChecklistItem[];
-  later: ChecklistItem[];
+  queue: ChecklistItem[];
   done: ChecklistItem[];
+}
+
+export interface SpecRef {
+  file: string;
+  anchor: string;
+  hash: string;
+}
+
+export interface QueueItem {
+  id: string;
+  label: string;
+  context: string;
+  source: SpecRef | null;
+  agent_hint: Agent | null;
+  children: QueueItem[];
+  checked: boolean;
+  stale: boolean;
+}
+
+export type CompletionOutcome = "done" | "needs_review" | "failed";
+export type AutopilotMode = "off" | "subtask" | "task" | "full";
+
+export type QueueEvent =
+  | { type: "cursor_advanced"; from: string; to: string | null }
+  | { type: "item_dispatched"; id: string; agent: Agent }
+  | { type: "item_completed"; id: string; outcome: CompletionOutcome }
+  | { type: "paused" }
+  | { type: "resumed" }
+  | { type: "blocked_awaiting_approval"; id: string; reason: string };
+
+export interface StaleReport {
+  item_id: string;
+  spec_section: string;
+  diff_summary: string;
+}
+
+export interface QueueContext {
+  item_id: string;
+  label: string;
+  context: string;
 }
 
 export interface Worktree {

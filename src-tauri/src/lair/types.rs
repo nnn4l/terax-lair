@@ -19,7 +19,6 @@ pub enum AgentChoice {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "lowercase")]
 pub enum Phase {
-    Brainstorm,
     Plan,
     Implement,
     Refactor,
@@ -64,10 +63,89 @@ pub struct SendMessageRequest {
     pub agent_choice: AgentChoice,
     pub phase: Phase,
     pub workspace: String,
+    pub task_context: Option<QueueContext>,
     pub claude_model: Option<String>,
     pub codex_model: Option<String>,
     pub claude_effort: Option<String>,
     pub codex_effort: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SpecRef {
+    pub file: String,
+    pub anchor: String,
+    pub hash: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct QueueItem {
+    pub id: String,
+    pub label: String,
+    pub context: String,
+    pub source: Option<SpecRef>,
+    pub agent_hint: Option<Agent>,
+    pub children: Vec<QueueItem>,
+    pub checked: bool,
+    pub stale: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub enum CompletionOutcome {
+    Done,
+    NeedsReview,
+    Failed,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum QueueEvent {
+    CursorAdvanced { from: String, to: Option<String> },
+    ItemDispatched { id: String, agent: Agent },
+    ItemCompleted { id: String, outcome: CompletionOutcome },
+    Paused,
+    Resumed,
+    BlockedAwaitingApproval { id: String, reason: String },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub enum AutopilotMode {
+    Off,
+    Subtask,
+    Task,
+    Full,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct RawQueueNode {
+    pub label: String,
+    pub context: String,
+    pub source_anchor: Option<String>,
+    pub agent_hint: Option<String>,
+    pub children: Vec<RawQueueNode>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SectionDiff {
+    pub anchor: String,
+    pub old_text: String,
+    pub new_text: String,
+    pub summary: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StaleReport {
+    pub item_id: String,
+    pub spec_section: String,
+    pub diff_summary: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct QueueContext {
+    pub item_id: String,
+    pub label: String,
+    pub context: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

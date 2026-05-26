@@ -3,16 +3,19 @@ use crate::lair::checklist::{
     ChecklistWatcher, Section,
 };
 use crate::lair::cli_agent::{run_agent_streaming, AgentSpawnRequest};
+use crate::lair::doc_watcher::WatcherHandle;
 use crate::lair::keychain::get_openrouter_key;
 use crate::lair::narrator::{narrate, NarrationTrigger};
 use crate::lair::parser_client::{
-    list_models, route_agent, summarize_output, ModelInfo, RouteRequest, RouteResult,
+    judge_outcome, list_models, route_agent, summarize_output, ModelInfo, RouteRequest, RouteResult,
     SummarizeRequest,
 };
 use crate::lair::phase_prompts::system_prompt_for;
+use crate::lair::queue::Queue;
+use crate::lair::{doc_watcher, spec_import};
 use crate::lair::types::*;
 use crate::lair::usage_parser::parse_usage;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::{async_runtime, AppHandle, Emitter, State};
 use uuid::Uuid;
@@ -21,15 +24,31 @@ pub struct LairConfig {
     pub openrouter_model: String,
 }
 
+pub struct LairState {
+    pub queue: Mutex<Option<Queue>>,
+    pub watcher: Mutex<Option<WatcherHandle>>,
+}
+
+impl LairState {
+    pub fn new() -> Arc<Self> {
+        Arc::new(Self {
+            queue: Mutex::new(None),
+            watcher: Mutex::new(None),
+        })
+    }
+}
+
 #[tauri::command]
 pub async fn lair_send_message(
     app: AppHandle,
     config: State<'_, Arc<LairConfig>>,
     checklist_watcher: State<'_, ChecklistWatcher>,
+    lair_state: State<'_, Arc<LairState>>,
     req: SendMessageRequest,
 ) -> Result<Vec<String>, String> {
     let _ = checklist_watcher; // watcher state managed separately
     let config = config.inner().clone();
+    let lair_state = lair_state.inner().clone();
     let mut ids = Vec::new();
     match req.agent_choice {
         AgentChoice::Claude => {
@@ -38,7 +57,7 @@ pub async fn lair_send_message(
                 &config,
                 NarrationTrigger::Dispatching { agent: Agent::Claude },
             );
-            ids.push(spawn(app, config, Agent::Claude, &req).await?);
+            ids.push(spawn(app, config, lair_state, Agent::Claude, &req).await?);
         }
         AgentChoice::Codex => {
             emit_narration_background(
@@ -46,12 +65,18 @@ pub async fn lair_send_message(
                 &config,
                 NarrationTrigger::Dispatching { agent: Agent::Codex },
             );
-            ids.push(spawn(app, config, Agent::Codex, &req).await?);
+            ids.push(spawn(app, config, lair_state, Agent::Codex, &req).await?);
         }
         AgentChoice::Compare => {
             emit_narration_background(&app, &config, NarrationTrigger::CompareLaunching);
-            let claude = spawn(app.clone(), config.clone(), Agent::Claude, &req);
-            let codex = spawn(app, config, Agent::Codex, &req);
+            let claude = spawn(
+                app.clone(),
+                config.clone(),
+                lair_state.clone(),
+                Agent::Claude,
+                &req,
+            );
+            let codex = spawn(app, config, lair_state, Agent::Codex, &req);
             let (claude_id, codex_id) = tokio::join!(claude, codex);
             ids.push(claude_id?);
             ids.push(codex_id?);
@@ -82,7 +107,7 @@ pub async fn lair_send_message(
                     reason: route.reason.clone(),
                 },
             );
-            ids.push(spawn(app, config, agent, &req).await?);
+            ids.push(spawn(app, config, lair_state, agent, &req).await?);
         }
     }
     Ok(ids)
@@ -110,6 +135,7 @@ fn emit_narration_background(app: &AppHandle, config: &Arc<LairConfig>, trigger:
 async fn spawn(
     app: AppHandle,
     config: Arc<LairConfig>,
+    lair_state: Arc<LairState>,
     agent: Agent,
     req: &SendMessageRequest,
 ) -> Result<String, String> {
@@ -142,10 +168,29 @@ async fn spawn(
     let app_c = app.clone();
     let id_c = id.clone();
 
+    let effective_prompt = if let Some(ctx) = &req.task_context {
+        format!(
+            "## Current task\n{}\n\n## Task context\n{}\n\n## User message\n{}",
+            ctx.label, ctx.context, req.prompt
+        )
+    } else {
+        req.prompt.clone()
+    };
+
+    if let Some(ctx) = &req.task_context {
+        let _ = app.emit(
+            "lair-queue-event",
+            QueueEvent::ItemDispatched {
+                id: ctx.item_id.clone(),
+                agent: agent.clone(),
+            },
+        );
+    }
+
     let exit = run_agent_streaming(
         AgentSpawnRequest {
             agent: agent.clone(),
-            prompt: req.prompt.clone(),
+            prompt: effective_prompt,
             system_prompt,
             model: model.clone(),
             effort: effort.clone(),
@@ -168,6 +213,12 @@ async fn spawn(
 
     let raw = buf.lock().unwrap().clone();
     let usage = parse_usage(&raw, &agent);
+    let queue_outcome = match scan_for_result_marker(&raw) {
+        Some(outcome) => outcome,
+        None => judge_outcome(&raw, &config)
+            .await
+            .unwrap_or(CompletionOutcome::NeedsReview),
+    };
 
     let _ = app.emit(
         "lair-card-update",
@@ -187,6 +238,42 @@ async fn spawn(
             },
         },
     );
+
+    if let Some(ctx) = &req.task_context {
+        let mut guard = lair_state.queue.lock().unwrap();
+        if let Some(queue) = guard.as_mut() {
+            queue.check(&ctx.item_id, queue_outcome.clone());
+            let _ = app.emit(
+                "lair-queue-event",
+                QueueEvent::ItemCompleted {
+                    id: ctx.item_id.clone(),
+                    outcome: queue_outcome.clone(),
+                },
+            );
+            if queue_outcome == CompletionOutcome::Failed && queue.stop_on_failure {
+                queue.pause();
+                let _ = app.emit("lair-queue-event", QueueEvent::Paused);
+            } else if let Some(gate_id) = queue.needs_approval_gate() {
+                queue.pause();
+                let _ = app.emit(
+                    "lair-queue-event",
+                    QueueEvent::BlockedAwaitingApproval {
+                        id: gate_id,
+                        reason: "task boundary".to_string(),
+                    },
+                );
+            } else if !queue.paused && queue.autopilot != AutopilotMode::Off {
+                let to = queue.current().map(|item| item.id.clone());
+                let _ = app.emit(
+                    "lair-queue-event",
+                    QueueEvent::CursorAdvanced {
+                        from: ctx.item_id.clone(),
+                        to,
+                    },
+                );
+            }
+        }
+    }
 
     let (status, summary, outcome, error) = match exit {
         Ok(0) => {
@@ -299,6 +386,135 @@ pub fn lair_watch_checklist(
     Ok(())
 }
 
+// ---- queue commands ----
+
+#[tauri::command]
+pub async fn lair_import_spec(
+    app: AppHandle,
+    config: State<'_, Arc<LairConfig>>,
+    state: State<'_, Arc<LairState>>,
+    workspace: String,
+    path: String,
+) -> Result<Vec<QueueItem>, String> {
+    let items = spec_import::import_spec(&workspace, &path, &config).await?;
+    let queue = Queue::new(items.clone(), AutopilotMode::Task);
+    let app_c = app.clone();
+    let watcher = doc_watcher::watch_specs(vec![path.clone()], move |file| {
+        let _ = app_c.emit("lair-spec-changed", file);
+    })?;
+    *state.queue.lock().unwrap() = Some(queue);
+    *state.watcher.lock().unwrap() = Some(watcher);
+    Ok(items)
+}
+
+#[tauri::command]
+pub async fn lair_paste_spec(
+    config: State<'_, Arc<LairConfig>>,
+    state: State<'_, Arc<LairState>>,
+    workspace: String,
+    markdown: String,
+) -> Result<Vec<QueueItem>, String> {
+    let items = spec_import::import_pasted_spec(&workspace, &markdown, &config).await?;
+    *state.queue.lock().unwrap() = Some(Queue::new(items.clone(), AutopilotMode::Task));
+    Ok(items)
+}
+
+#[tauri::command]
+pub fn lair_list_specs(workspace: String) -> Result<Vec<String>, String> {
+    spec_import::list_specs(&workspace)
+}
+
+#[tauri::command]
+pub fn lair_queue_pause(app: AppHandle, state: State<'_, Arc<LairState>>) {
+    if let Some(queue) = state.queue.lock().unwrap().as_mut() {
+        queue.pause();
+        let _ = app.emit("lair-queue-event", QueueEvent::Paused);
+    }
+}
+
+#[tauri::command]
+pub fn lair_queue_resume(app: AppHandle, state: State<'_, Arc<LairState>>) {
+    if let Some(queue) = state.queue.lock().unwrap().as_mut() {
+        queue.resume();
+        let _ = app.emit("lair-queue-event", QueueEvent::Resumed);
+    }
+}
+
+#[tauri::command]
+pub fn lair_queue_skip(app: AppHandle, state: State<'_, Arc<LairState>>) {
+    if let Some(queue) = state.queue.lock().unwrap().as_mut() {
+        let from = queue.current().map(|item| item.id.clone()).unwrap_or_default();
+        queue.skip();
+        let to = queue.current().map(|item| item.id.clone());
+        let _ = app.emit("lair-queue-event", QueueEvent::CursorAdvanced { from, to });
+    }
+}
+
+#[tauri::command]
+pub fn lair_queue_pin(state: State<'_, Arc<LairState>>, item_id: String) {
+    if let Some(queue) = state.queue.lock().unwrap().as_mut() {
+        queue.pin(&item_id);
+    }
+}
+
+#[tauri::command]
+pub fn lair_queue_unpin(state: State<'_, Arc<LairState>>) {
+    if let Some(queue) = state.queue.lock().unwrap().as_mut() {
+        queue.unpin();
+    }
+}
+
+#[tauri::command]
+pub fn lair_queue_get(state: State<'_, Arc<LairState>>) -> Option<Vec<QueueItem>> {
+    state.queue.lock().unwrap().as_ref().map(|queue| queue.items().clone())
+}
+
+#[tauri::command]
+pub fn lair_queue_set_autopilot(
+    state: State<'_, Arc<LairState>>,
+    mode: AutopilotMode,
+) {
+    if let Some(queue) = state.queue.lock().unwrap().as_mut() {
+        queue.set_autopilot(mode);
+    }
+}
+
+#[tauri::command]
+pub async fn lair_queue_check_stale(
+    config: State<'_, Arc<LairConfig>>,
+    state: State<'_, Arc<LairState>>,
+) -> Result<Vec<StaleReport>, String> {
+    let items = state
+        .queue
+        .lock()
+        .unwrap()
+        .as_ref()
+        .map(|queue| queue.items().clone())
+        .unwrap_or_default();
+    let reports = doc_watcher::check_stale(&items, &config).await?;
+    if !reports.is_empty() {
+        let ids = reports
+            .iter()
+            .map(|report| report.item_id.clone())
+            .collect::<Vec<_>>();
+        if let Some(queue) = state.queue.lock().unwrap().as_mut() {
+            mark_stale(queue.items_mut(), &ids, true);
+        }
+    }
+    Ok(reports)
+}
+
+#[tauri::command]
+pub fn lair_queue_resync(
+    state: State<'_, Arc<LairState>>,
+    accepted_ids: Vec<String>,
+) -> Result<(), String> {
+    let mut guard = state.queue.lock().unwrap();
+    let queue = guard.as_mut().ok_or("no queue")?;
+    resync_items(queue.items_mut(), &accepted_ids);
+    Ok(())
+}
+
 // ---- helpers ----
 
 fn model_for(agent: &Agent, req: &SendMessageRequest) -> Option<String> {
@@ -325,7 +541,6 @@ fn agent_key(agent: &Agent) -> String {
 
 fn phase_key(phase: &Phase) -> String {
     match phase {
-        Phase::Brainstorm => "brainstorm",
         Phase::Plan => "plan",
         Phase::Implement => "implement",
         Phase::Refactor => "refactor",
@@ -333,6 +548,54 @@ fn phase_key(phase: &Phase) -> String {
         Phase::Review => "review",
     }
     .to_string()
+}
+
+pub fn scan_for_result_marker(output: &str) -> Option<CompletionOutcome> {
+    let tail_rev: String = output.chars().rev().take(500).collect();
+    let tail: String = tail_rev.chars().rev().collect();
+    for line in tail.lines().rev() {
+        let low = line.trim().to_lowercase();
+        if low.starts_with("result:") {
+            if low.contains("done") {
+                return Some(CompletionOutcome::Done);
+            }
+            if low.contains("partial") || low.contains("needs_review") {
+                return Some(CompletionOutcome::NeedsReview);
+            }
+            if low.contains("failed") || low.contains("fail") {
+                return Some(CompletionOutcome::Failed);
+            }
+        }
+    }
+    None
+}
+
+fn mark_stale(items: &mut [QueueItem], ids: &[String], stale: bool) {
+    for item in items {
+        if ids.contains(&item.id) {
+            item.stale = stale;
+        }
+        mark_stale(&mut item.children, ids, stale);
+    }
+}
+
+fn resync_items(items: &mut [QueueItem], ids: &[String]) {
+    for item in items {
+        if ids.contains(&item.id) {
+            item.stale = false;
+            if let Some(source) = &mut item.source {
+                if let Ok(content) = std::fs::read_to_string(&source.file) {
+                    let hashes = spec_import::section_hashes(&content);
+                    if let Some(hash) = hashes.get(&source.anchor) {
+                        source.hash = hash.clone();
+                    }
+                } else {
+                    item.source = None;
+                }
+            }
+        }
+        resync_items(&mut item.children, ids);
+    }
 }
 
 fn now_ms() -> u64 {

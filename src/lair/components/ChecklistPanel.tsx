@@ -11,9 +11,7 @@ import {
 import type { ChecklistItem, ChecklistSection } from "@/lair/types";
 
 const SECTIONS: { key: ChecklistSection; label: string }[] = [
-  { key: "now", label: "Now" },
-  { key: "next", label: "Next" },
-  { key: "later", label: "Later" },
+  { key: "queue", label: "Queue" },
   { key: "done", label: "Done" },
 ];
 
@@ -96,7 +94,7 @@ export function ChecklistPanel() {
                   </span>
                 ) : null}
               </span>
-              <span>{open ? "▾" : "▸"}</span>
+              <span>{open ? "v" : ">"}</span>
             </button>
 
             {open ? (
@@ -129,7 +127,7 @@ export function ChecklistPanel() {
                       aria-label="delete item"
                       className="shrink-0 text-[12px] leading-none text-muted-foreground/40 opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100"
                     >
-                      ×
+                      x
                     </button>
                   </li>
                 ))}
