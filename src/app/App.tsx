@@ -53,6 +53,7 @@ import { LairFloatingSidebar } from "@/lair/components/LairFloatingSidebar";
 import { useLair } from "@/lair/state";
 import { resolveLairWorkspace } from "@/lair/workspace";
 import { FileExplorer, type FileExplorerHandle } from "@/modules/explorer";
+import { ChecklistPanel } from "@/lair/components/ChecklistPanel";
 import {
   listenFsChanged,
   parentDir,
@@ -393,6 +394,7 @@ export default function App() {
   const openMini = useChatStore((s) => s.openMini);
   const focusInput = useChatStore((s) => s.focusInput);
   const openPanel = useChatStore((s) => s.openPanel);
+  const closePanel = useChatStore((s) => s.closePanel);
   const panelOpen = useChatStore((s) => s.panelOpen);
   const apiKeys = useChatStore((s) => s.apiKeys);
   const setApiKeys = useChatStore((s) => s.setApiKeys);
@@ -1439,18 +1441,23 @@ export default function App() {
                 }}
               >
                 <div className="flex h-full min-h-0 flex-col border-r border-border/60 bg-card">
-                  <div className="min-h-0 flex-1">
+                  <div className="flex min-h-0 flex-1 flex-col">
                     {sidebarView === "explorer" ? (
-                      <FileExplorer
-                        ref={explorerRef}
-                        rootPath={explorerRoot}
-                        onOpenFile={handleOpenFile}
-                        onPathRenamed={handlePathRenamed}
-                        onPathDeleted={handlePathDeleted}
-                        onRevealInTerminal={cdInNewTab}
-                        onAttachToAgent={handleAttachFileToAgent}
-                        onOpenMarkdownPreview={openMarkdownPreview}
-                      />
+                      <>
+                        <ChecklistPanel />
+                        <div className="min-h-0 flex-1">
+                          <FileExplorer
+                            ref={explorerRef}
+                            rootPath={explorerRoot}
+                            onOpenFile={handleOpenFile}
+                            onPathRenamed={handlePathRenamed}
+                            onPathDeleted={handlePathDeleted}
+                            onRevealInTerminal={cdInNewTab}
+                            onAttachToAgent={handleAttachFileToAgent}
+                            onOpenMarkdownPreview={openMarkdownPreview}
+                          />
+                        </div>
+                      </>
                     ) : (
                       <SourceControlPanel
                         open
@@ -1522,7 +1529,11 @@ export default function App() {
 
           <AnimatePresence>
             {USE_LAIR_CHAT ? (
-              <LairFloatingSidebar key="lair-sidebar" open={panelOpen} />
+              <LairFloatingSidebar
+                key="lair-sidebar"
+                open={panelOpen}
+                onClose={closePanel}
+              />
             ) : null}
           </AnimatePresence>
 

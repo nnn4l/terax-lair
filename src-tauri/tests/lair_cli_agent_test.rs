@@ -11,7 +11,9 @@ async fn streams_chunks_from_fake_command() {
     let req = AgentSpawnRequest {
         agent: Agent::Claude,
         prompt: "test".into(),
-        phase_prefix: "[phase: test]".into(),
+        system_prompt: String::new(),
+        model: None,
+        effort: None,
         cwd: ".".into(),
         program_override: Some(if cfg!(windows) {
             "cmd".into()

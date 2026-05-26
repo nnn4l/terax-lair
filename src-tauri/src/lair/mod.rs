@@ -1,6 +1,10 @@
+pub mod checklist;
 pub mod cli_agent;
 pub mod keychain;
+pub mod narrator;
 pub mod orchestrator;
 pub mod parser_client;
+pub mod phase_prompts;
 pub mod types;
+pub mod usage_parser;
 pub mod worktree;

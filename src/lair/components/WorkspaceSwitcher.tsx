@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
+import { Refresh01Icon } from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
 import { listWorktrees } from "@/lair/api";
 import { useLair } from "@/lair/state";
 import type { Worktree } from "@/lair/types";
@@ -59,11 +61,17 @@ export function WorkspaceSwitcher() {
       </select>
       <button
         type="button"
-        className="h-8 rounded-md border border-border px-2 text-[11px] text-muted-foreground hover:text-foreground disabled:opacity-50"
+        title={loading ? "refreshing..." : "refresh worktrees"}
+        aria-label="refresh worktrees"
+        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border text-muted-foreground hover:text-foreground disabled:opacity-50"
         onClick={() => void refresh()}
         disabled={!workspace || loading}
       >
-        {loading ? "loading" : "refresh"}
+        <HugeiconsIcon
+          icon={Refresh01Icon}
+          size={14}
+          className={loading ? "animate-spin" : ""}
+        />
       </button>
     </div>
   );

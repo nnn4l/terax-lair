@@ -18,7 +18,8 @@ export function PhaseDropdown() {
     <select
       value={phase}
       onChange={(event) => setPhase(event.target.value as Phase)}
-      className="h-8 rounded-md border border-border bg-background px-2 text-[12px]"
+      className="h-6 rounded-md border-0 bg-muted/60 px-1.5 text-[11px] font-medium text-foreground/90 outline-none hover:bg-muted focus:bg-muted"
+      title="phase"
     >
       {PHASES.map((item) => (
         <option key={item} value={item}>

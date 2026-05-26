@@ -1,7 +1,11 @@
 pub mod lair;
 mod modules;
 
-use lair::orchestrator::{lair_send_message, LairConfig};
+use lair::checklist::ChecklistWatcher;
+use lair::orchestrator::{
+    lair_append_checklist_item, lair_delete_checklist_item, lair_list_models, lair_read_checklist,
+    lair_send_message, lair_toggle_checklist_item, lair_watch_checklist, LairConfig,
+};
 use lair::worktree::lair_list_worktrees;
 use modules::{agent, fs, git, net, pty, secrets, shell, workspace};
 use std::sync::{Arc, Mutex};
@@ -116,6 +120,7 @@ pub fn run() {
         )
         .plugin(tauri_plugin_opener::init())
         .manage(lair_config)
+        .manage(ChecklistWatcher::default())
         .manage(pty::PtyState::default())
         .manage(shell::ShellState::default())
         .manage(secrets::SecretsState::default())
@@ -194,6 +199,12 @@ pub fn run() {
             net::ai_http_stream,
             lair_send_message,
             lair_list_worktrees,
+            lair_read_checklist,
+            lair_append_checklist_item,
+            lair_toggle_checklist_item,
+            lair_delete_checklist_item,
+            lair_watch_checklist,
+            lair_list_models,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
