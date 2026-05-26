@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { cn } from "@/lib/utils";
+import { MessageResponse } from "@/components/ai-elements/message";
 import { appendChecklistItem } from "@/lair/api";
 import { useLair } from "@/lair/state";
 import type { CardData, ChecklistSection } from "@/lair/types";
@@ -59,13 +60,13 @@ export function Card({ card }: { card: CardData }) {
 
       {card.status === "done" && card.summary ? (
         <>
-          <p className="whitespace-pre-wrap text-[13px] leading-relaxed">
+          <MessageResponse className="text-[13px] leading-relaxed">
             {card.summary}
-          </p>
+          </MessageResponse>
           {card.outcome ? (
-            <p className="mt-1 text-[12px] text-muted-foreground">
+            <MessageResponse className="mt-1 text-[12px] text-muted-foreground">
               {card.outcome}
-            </p>
+            </MessageResponse>
           ) : null}
           <div className="mt-2 flex items-center gap-3 border-t border-border/40 pt-1.5">
             <button

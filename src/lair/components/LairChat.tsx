@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { sendMessage, onCardUpdate, onStreamChunk, onNarration } from "@/lair/api";
 import { useLair } from "@/lair/state";
 import { AgentDropdown } from "@/lair/components/AgentDropdown";
@@ -10,6 +10,9 @@ import {
   Add01Icon,
   ArrowDown01Icon,
   Cancel01Icon,
+  CopyIcon,
+  PencilEdit02Icon,
+  Refresh01Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import type { CardData, NarrationLine as NarrationData, Turn } from "@/lair/types";
@@ -37,13 +40,11 @@ export function LairChat({ onClose }: { onClose?: () => void }) {
   const codexEffort = useLair((s) => s.codexEffort);
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
+  const [error, setError] = useState<{ message: string; prompt: string } | null>(null);
+  const threadRef = useRef<HTMLDivElement | null>(null);
+  const composerRef = useRef<HTMLTextAreaElement | null>(null);
+  const stickToBottomRef = useRef(true);
   const canSend = text.trim().length > 0 && !sending;
-
-  const shortcut = useMemo(() => {
-    if (typeof navigator === "undefined") return "Ctrl ⏎";
-    const mac = /Mac|iPhone|iPad/.test(navigator.platform);
-    return mac ? "⌘ ⏎" : "Ctrl ⏎";
-  }, []);
 
   useEffect(() => {
     const cardUpdate = onCardUpdate((event) =>
@@ -73,20 +74,44 @@ export function LairChat({ onClose }: { onClose?: () => void }) {
 
   const isEmpty = turns.length === 0;
   const activeSession = sessions.find((s) => s.id === activeSessionId) ?? null;
+  const activityKey = useMemo(
+    () =>
+      [
+        turns.length,
+        cards.map((card) => `${card.id}:${card.status}:${card.raw_output.length}`).join("|"),
+        narrations.length,
+        error?.message ?? "",
+      ].join(":"),
+    [turns.length, cards, narrations.length, error],
+  );
   const showsClaude =
     agentChoice === "claude" || agentChoice === "auto" || agentChoice === "compare";
   const showsCodex =
     agentChoice === "codex" || agentChoice === "auto" || agentChoice === "compare";
   const showsBoth = showsClaude && showsCodex;
 
-  async function submit() {
-    const prompt = text.trim();
+  useEffect(() => {
+    if (!stickToBottomRef.current) return;
+    const el = threadRef.current;
+    if (!el) return;
+    el.scrollTop = el.scrollHeight;
+  }, [activityKey]);
+
+  function handleThreadScroll() {
+    const el = threadRef.current;
+    if (!el) return;
+    stickToBottomRef.current =
+      el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+  }
+
+  async function submitPrompt(prompt: string) {
     if (!prompt || sending) return;
     if (!workspace) {
-      window.alert("Set a workspace first");
+      setError({ message: "Set a workspace first.", prompt });
       return;
     }
     setSending(true);
+    setError(null);
     if (!activeSessionId) newSession();
     const turnId = startTurn(prompt);
     setText("");
@@ -103,9 +128,26 @@ export function LairChat({ onClose }: { onClose?: () => void }) {
         codex_effort: codexEffort,
       });
       attachCardIds(turnId, ids);
+    } catch (err) {
+      setError({
+        message: err instanceof Error ? err.message : String(err),
+        prompt,
+      });
     } finally {
       setSending(false);
     }
+  }
+
+  function submit() {
+    void submitPrompt(text.trim());
+  }
+
+  function editPrompt(prompt: string) {
+    setText(prompt);
+    requestAnimationFrame(() => {
+      composerRef.current?.focus();
+      composerRef.current?.setSelectionRange(prompt.length, prompt.length);
+    });
   }
 
   return (
@@ -146,18 +188,43 @@ export function LairChat({ onClose }: { onClose?: () => void }) {
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto">
+      <div
+        ref={threadRef}
+        onScroll={handleThreadScroll}
+        data-lair-thread="true"
+        className="min-h-0 flex-1 overflow-y-auto px-3 py-3"
+      >
         {isEmpty ? (
-          <EmptyState onPick={setText} />
+          <div className="flex min-h-full flex-col">
+            <div className="min-h-0 flex-1">
+              <EmptyState onPick={setText} />
+            </div>
+            {error ? (
+              <ErrorState
+                message={error.message}
+                onRetry={() => void submitPrompt(error.prompt)}
+              />
+            ) : null}
+          </div>
         ) : (
-          turns.map((turn) => (
-            <TurnView
-              key={turn.id}
-              turn={turn}
-              cardById={cardById}
-              narrationById={narrationById}
-            />
-          ))
+          <div className="flex flex-col gap-3 pb-4">
+            {turns.map((turn) => (
+              <TurnView
+                key={turn.id}
+                turn={turn}
+                cardById={cardById}
+                narrationById={narrationById}
+                onRetry={(prompt) => void submitPrompt(prompt)}
+                onEdit={editPrompt}
+              />
+            ))}
+            {error ? (
+              <ErrorState
+                message={error.message}
+                onRetry={() => void submitPrompt(error.prompt)}
+              />
+            ) : null}
+          </div>
         )}
       </div>
 
@@ -181,14 +248,16 @@ export function LairChat({ onClose }: { onClose?: () => void }) {
       <div className="border-t border-border/60 bg-card/80 px-3 pt-2 pb-3">
         <div className="relative rounded-md border border-border bg-background focus-within:ring-1 focus-within:ring-ring">
           <textarea
-            className="block min-h-32 w-full resize-none rounded-md bg-transparent p-2.5 pb-10 text-[13px] outline-none"
+            ref={composerRef}
+            aria-label="Message Lair"
+            className="block min-h-28 w-full resize-none rounded-md bg-transparent p-2.5 pb-10 text-[13px] leading-relaxed outline-none"
             value={text}
             onChange={(event) => setText(event.target.value)}
             placeholder="type message..."
             onKeyDown={(event) => {
-              if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+              if (event.key === "Enter" && !event.shiftKey) {
                 event.preventDefault();
-                void submit();
+                submit();
               }
             }}
           />
@@ -197,12 +266,12 @@ export function LairChat({ onClose }: { onClose?: () => void }) {
             <button
               type="button"
               className="pointer-events-auto flex h-6 items-center gap-1.5 rounded-md bg-primary px-2 text-[11px] font-medium text-primary-foreground disabled:opacity-40"
-              onClick={() => void submit()}
+              onClick={submit}
               disabled={!canSend}
-              title={`send (${shortcut})`}
+              title="Send"
+              aria-label="Send message"
             >
-              <span className="text-[10px] opacity-70">{shortcut}</span>
-              <span>{sending ? "..." : "send"}</span>
+              <span>{sending ? "sending" : "send"}</span>
             </button>
           </div>
         </div>
@@ -308,9 +377,17 @@ interface TurnViewProps {
   turn: Turn;
   cardById: Map<string, CardData>;
   narrationById: Map<string, NarrationData>;
+  onRetry: (prompt: string) => void;
+  onEdit: (prompt: string) => void;
 }
 
-function TurnView({ turn, cardById, narrationById }: TurnViewProps) {
+export function TurnView({
+  turn,
+  cardById,
+  narrationById,
+  onRetry,
+  onEdit,
+}: TurnViewProps) {
   const turnCards = turn.cardIds
     .map((id) => cardById.get(id))
     .filter((c): c is CardData => Boolean(c));
@@ -319,23 +396,123 @@ function TurnView({ turn, cardById, narrationById }: TurnViewProps) {
     .filter((n): n is NarrationData => Boolean(n));
 
   return (
-    <div className="px-3 py-2">
-      <p className="mb-2 whitespace-pre-wrap text-[13px] font-medium text-foreground/90">
-        {turn.prompt}
-      </p>
-      {turnNarrations.map((n) => (
-        <NarrationLine key={n.id} line={n} />
-      ))}
-      {turnCards.map((card) => (
-        <Card key={card.id} card={card} />
-      ))}
-      {turnCards.length === 0 && turnNarrations.length === 0 ? (
-        <p className="text-[11px] italic text-muted-foreground/60">
-          waiting...
-        </p>
-      ) : null}
+    <div className="group/turn flex flex-col gap-2">
+      <div data-lair-role="user" className="flex justify-end">
+        <div className="max-w-[88%] rounded-lg rounded-br-sm border border-border/50 bg-muted/60 px-2.5 py-2 shadow-sm">
+          <p className="whitespace-pre-wrap text-[13px] font-medium leading-relaxed text-foreground/90">
+            {turn.prompt}
+          </p>
+          <div className="mt-1 flex justify-end opacity-0 transition-opacity group-hover/turn:opacity-100 focus-within:opacity-100">
+            <IconButton
+              label="Edit prompt"
+              title="Edit prompt"
+              onClick={() => onEdit(turn.prompt)}
+              icon={PencilEdit02Icon}
+            />
+          </div>
+        </div>
+      </div>
+      <div data-lair-role="assistant" className="flex flex-col gap-1.5">
+        <div className="flex items-center justify-between gap-2 px-0.5">
+          <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground/60">
+            Response
+          </span>
+          <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover/turn:opacity-100 focus-within:opacity-100">
+            <IconButton
+              label="Copy assistant response"
+              title="Copy response"
+              onClick={() => void copyTurnResponse(turnCards)}
+              icon={CopyIcon}
+              disabled={turnCards.length === 0}
+            />
+            <IconButton
+              label="Retry prompt"
+              title="Retry"
+              onClick={() => onRetry(turn.prompt)}
+              icon={Refresh01Icon}
+            />
+          </div>
+        </div>
+        {turnNarrations.map((n) => (
+          <NarrationLine key={n.id} line={n} />
+        ))}
+        {turnCards.map((card) => (
+          <Card key={card.id} card={card} />
+        ))}
+        {turnCards.length === 0 && turnNarrations.length === 0 ? (
+          <ThinkingState />
+        ) : null}
+      </div>
     </div>
   );
+}
+
+function ThinkingState() {
+  return (
+    <div className="rounded-lg border border-border/50 bg-card/70 px-2.5 py-2 text-[12px] text-muted-foreground shadow-sm">
+      <span className="mr-2 inline-block size-1.5 animate-pulse rounded-full bg-primary/70 align-middle" />
+      <span>Thinking</span>
+    </div>
+  );
+}
+
+function ErrorState({
+  message,
+  onRetry,
+}: {
+  message: string;
+  onRetry: () => void;
+}) {
+  return (
+    <div className="rounded-lg border border-destructive/40 bg-destructive/5 px-2.5 py-2 text-[12px] text-destructive">
+      <div className="flex items-start justify-between gap-3">
+        <p className="leading-relaxed">{message}</p>
+        <button
+          type="button"
+          onClick={onRetry}
+          className="shrink-0 rounded-md bg-destructive/10 px-2 py-1 text-[11px] font-medium hover:bg-destructive/15"
+        >
+          retry
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function IconButton({
+  label,
+  title,
+  onClick,
+  icon,
+  disabled,
+}: {
+  label: string;
+  title: string;
+  onClick: () => void;
+  icon: typeof CopyIcon;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      title={title}
+      onClick={onClick}
+      disabled={disabled}
+      className="flex size-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+    >
+      <HugeiconsIcon icon={icon} size={12} strokeWidth={1.75} />
+    </button>
+  );
+}
+
+async function copyTurnResponse(cards: CardData[]) {
+  const text = cards
+    .map((card) => [card.summary, card.outcome, card.raw_output].filter(Boolean).join("\n\n"))
+    .filter(Boolean)
+    .join("\n\n---\n\n");
+  if (!text || !navigator?.clipboard?.writeText) return;
+  await navigator.clipboard.writeText(text);
 }
 
 function ModelRow({

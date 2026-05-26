@@ -2,7 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, test } from "vitest";
 import { AgentDropdown } from "@/lair/components/AgentDropdown";
 import { Card } from "@/lair/components/Card";
-import { LairChat } from "@/lair/components/LairChat";
+import { LairChat, TurnView } from "@/lair/components/LairChat";
 import { ModelDropdown } from "@/lair/components/ModelDropdown";
 import { PhaseDropdown } from "@/lair/components/PhaseDropdown";
 import { useLair } from "@/lair/state";
@@ -34,6 +34,69 @@ describe("LairChat components", () => {
     const html = renderToStaticMarkup(<LairChat />);
     expect(html).toContain("bg-gradient-to-b");
     expect(html).toContain("from-foreground/[0.03]");
+  });
+
+  test("lair chat renders a chat thread with composer affordances", () => {
+    const chatHtml = renderToStaticMarkup(<LairChat />);
+    const card: CardData = {
+      id: "card-1",
+      agent: "codex",
+      status: "done",
+      raw_output: "raw output",
+      summary: "Implemented **markdown** summary.",
+      outcome: "complete",
+      error: null,
+      usage: null,
+      model: null,
+      effort: null,
+    };
+    const turnHtml = renderToStaticMarkup(
+      <TurnView
+        turn={{
+          id: "turn-1",
+          prompt: "Make the summary **clear**",
+          startedAt: 1,
+          cardIds: ["card-1"],
+          narrationIds: [],
+        }}
+        cardById={new Map([["card-1", card]])}
+        narrationById={new Map()}
+        onRetry={() => undefined}
+        onEdit={() => undefined}
+      />,
+    );
+
+    expect(chatHtml).toContain('data-lair-thread="true"');
+    expect(chatHtml).toContain('aria-label="Message Lair"');
+    expect(chatHtml).toContain('aria-label="Send message"');
+    expect(turnHtml).toContain('data-lair-role="user"');
+    expect(turnHtml).toContain('data-lair-role="assistant"');
+    expect(turnHtml).toContain("Make the summary");
+    expect(turnHtml).toContain("Implemented");
+    expect(turnHtml).toContain('aria-label="Copy assistant response"');
+    expect(turnHtml).toContain('aria-label="Retry prompt"');
+    expect(turnHtml).toContain('aria-label="Edit prompt"');
+  });
+
+  test("lair chat shows contextual thinking state for a pending turn", () => {
+    const html = renderToStaticMarkup(
+      <TurnView
+        turn={{
+          id: "turn-1",
+          prompt: "Investigate",
+          startedAt: 1,
+          cardIds: [],
+          narrationIds: [],
+        }}
+        cardById={new Map()}
+        narrationById={new Map()}
+        onRetry={() => undefined}
+        onEdit={() => undefined}
+      />,
+    );
+
+    expect(html).toContain("Thinking");
+    expect(html).not.toContain("waiting...");
   });
 
   test("codex model row hides model pill and stale OpenAI model IDs", () => {
