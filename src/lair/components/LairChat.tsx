@@ -5,6 +5,7 @@ import {
   onStreamChunk,
   onNarration,
   onQueueEvent,
+  onSpecComplete,
   onSpecChanged,
   queueCheckStale,
   queueGet,
@@ -13,6 +14,7 @@ import {
 import { useLair } from "@/lair/state";
 import { AgentDropdown } from "@/lair/components/AgentDropdown";
 import { Card } from "@/lair/components/Card";
+import { CritiqueTray } from "@/lair/components/CritiqueTray";
 import { NarrationLine } from "@/lair/components/NarrationLine";
 import {
   Select,
@@ -22,6 +24,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ApprovalGateCard } from "@/lair/components/ApprovalGateCard";
+import { PillarCheckCard } from "@/lair/components/PillarCheckCard";
 import { StaleSpecCard } from "@/lair/components/StaleSpecCard";
 import {
   Add01Icon,
@@ -68,6 +71,9 @@ export function LairChat({ onClose }: { onClose?: () => void }) {
   const staleReports = useLair((s) => s.staleReports);
   const staleSpecFile = useLair((s) => s.staleSpecFile);
   const pendingGate = useLair((s) => s.pendingGate);
+  const pillarCheckPending = useLair((s) => s.pillarCheckPending);
+  const critiqueDraftCount = useLair((s) => s.critiqueDrafts.length);
+  const critiqueTrayOpen = useLair((s) => s.critiqueTrayOpen);
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<{ message: string; prompt: string } | null>(null);
@@ -95,6 +101,16 @@ export function LairChat({ onClose }: { onClose?: () => void }) {
       void narrationSub.then((unlisten) => unlisten());
     };
   }, [appendChunk, upsertCard, addNarration]);
+
+  useEffect(() => {
+    const sub = onSpecComplete(() => {
+      useLair.getState().setPhase("critique");
+      useLair.getState().setPillarCheckPending(true);
+    });
+    return () => {
+      void sub.then((unlisten) => unlisten());
+    };
+  }, []);
 
   useEffect(() => {
     const queueEvents = onQueueEvent((event) => {
@@ -340,6 +356,7 @@ export function LairChat({ onClose }: { onClose?: () => void }) {
               <StaleSpecCard reports={staleReports} specFile={staleSpecFile} />
             ) : null}
             {pendingGate ? <ApprovalGateCard gate={pendingGate} /> : null}
+            {pillarCheckPending ? <PillarCheckCard /> : null}
             <div className="min-h-0 flex-1">
               <EmptyState onPick={setText} />
             </div>
@@ -356,6 +373,7 @@ export function LairChat({ onClose }: { onClose?: () => void }) {
               <StaleSpecCard reports={staleReports} specFile={staleSpecFile} />
             ) : null}
             {pendingGate ? <ApprovalGateCard gate={pendingGate} /> : null}
+            {pillarCheckPending ? <PillarCheckCard /> : null}
             {turns.map((turn) => (
               <TurnView
                 key={turn.id}
@@ -396,19 +414,36 @@ export function LairChat({ onClose }: { onClose?: () => void }) {
             <div className="pointer-events-auto">
               <AgentDropdown />
             </div>
-            <button
-              type="button"
-              className="pointer-events-auto flex h-6 items-center gap-1.5 rounded-md bg-primary px-2 text-[11px] font-medium text-primary-foreground disabled:opacity-40"
-              onClick={submit}
-              disabled={!canSend}
-              title="Send"
-              aria-label="Send message"
-            >
-              <span>{sending ? "sending" : "send"}</span>
-            </button>
+            <div className="pointer-events-auto flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => useLair.getState().toggleCritiqueTray()}
+                className="flex h-6 items-center gap-1.5 rounded-md bg-muted px-2 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-muted/80 hover:text-foreground"
+                title="Critique tray"
+                aria-label="Toggle critique tray"
+              >
+                <span>{critiqueTrayOpen ? "hide" : "critique"}</span>
+                {critiqueDraftCount > 0 ? (
+                  <span className="rounded bg-background/70 px-1 text-[10px]">
+                    {critiqueDraftCount}
+                  </span>
+                ) : null}
+              </button>
+              <button
+                type="button"
+                className="flex h-6 items-center gap-1.5 rounded-md bg-primary px-2 text-[11px] font-medium text-primary-foreground disabled:opacity-40"
+                onClick={submit}
+                disabled={!canSend}
+                title="Send"
+                aria-label="Send message"
+              >
+                <span>{sending ? "sending" : "send"}</span>
+              </button>
+            </div>
           </div>
         </div>
       </div>
+      <CritiqueTray />
     </div>
   );
 }
