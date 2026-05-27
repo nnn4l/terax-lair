@@ -19,10 +19,10 @@ pub enum AgentChoice {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "lowercase")]
 pub enum Phase {
-    Plan,
     Implement,
     Refactor,
     Test,
+    Critique,
     Review,
 }
 
@@ -176,4 +176,25 @@ pub struct NarrationEvent {
 pub struct Worktree {
     pub path: String,
     pub branch: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum HubTabKind {
+    Dashboard,
+    Repo,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HubTab {
+    pub id: String,
+    pub kind: HubTabKind,
+    pub label: String,
+    pub repo_path: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct HubState {
+    pub tabs: Vec<HubTab>,
+    pub active_tab_id: Option<String>,
 }

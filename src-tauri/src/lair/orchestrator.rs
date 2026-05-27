@@ -213,6 +213,7 @@ async fn spawn(
 
     let raw = buf.lock().unwrap().clone();
     let usage = parse_usage(&raw, &agent);
+    let timed_out = matches!(&exit, Err(e) if e.contains("timeout"));
     let queue_outcome = match scan_for_result_marker(&raw) {
         Some(outcome) => outcome,
         None => judge_outcome(&raw, &config)
@@ -242,35 +243,46 @@ async fn spawn(
     if let Some(ctx) = &req.task_context {
         let mut guard = lair_state.queue.lock().unwrap();
         if let Some(queue) = guard.as_mut() {
-            queue.check(&ctx.item_id, queue_outcome.clone());
-            let _ = app.emit(
-                "lair-queue-event",
-                QueueEvent::ItemCompleted {
-                    id: ctx.item_id.clone(),
-                    outcome: queue_outcome.clone(),
-                },
-            );
-            if queue_outcome == CompletionOutcome::Failed && queue.stop_on_failure {
-                queue.pause();
-                let _ = app.emit("lair-queue-event", QueueEvent::Paused);
-            } else if let Some(gate_id) = queue.needs_approval_gate() {
+            if timed_out {
                 queue.pause();
                 let _ = app.emit(
                     "lair-queue-event",
                     QueueEvent::BlockedAwaitingApproval {
-                        id: gate_id,
-                        reason: "task boundary".to_string(),
+                        id: ctx.item_id.clone(),
+                        reason: "agent timed out \u{2014} investigate and resume".to_string(),
                     },
                 );
-            } else if !queue.paused && queue.autopilot != AutopilotMode::Off {
-                let to = queue.current().map(|item| item.id.clone());
+            } else {
+                queue.check(&ctx.item_id, queue_outcome.clone());
                 let _ = app.emit(
                     "lair-queue-event",
-                    QueueEvent::CursorAdvanced {
-                        from: ctx.item_id.clone(),
-                        to,
+                    QueueEvent::ItemCompleted {
+                        id: ctx.item_id.clone(),
+                        outcome: queue_outcome.clone(),
                     },
                 );
+                if queue_outcome == CompletionOutcome::Failed && queue.stop_on_failure {
+                    queue.pause();
+                    let _ = app.emit("lair-queue-event", QueueEvent::Paused);
+                } else if let Some(gate_id) = queue.needs_approval_gate() {
+                    queue.pause();
+                    let _ = app.emit(
+                        "lair-queue-event",
+                        QueueEvent::BlockedAwaitingApproval {
+                            id: gate_id,
+                            reason: "task boundary".to_string(),
+                        },
+                    );
+                } else if !queue.paused && queue.autopilot != AutopilotMode::Off {
+                    let to = queue.current().map(|item| item.id.clone());
+                    let _ = app.emit(
+                        "lair-queue-event",
+                        QueueEvent::CursorAdvanced {
+                            from: ctx.item_id.clone(),
+                            to,
+                        },
+                    );
+                }
             }
         }
     }
@@ -470,6 +482,48 @@ pub fn lair_queue_get(state: State<'_, Arc<LairState>>) -> Option<Vec<QueueItem>
 }
 
 #[tauri::command]
+pub fn lair_queue_drop(app: AppHandle, state: State<'_, Arc<LairState>>, item_id: String) {
+    if let Some(queue) = state.queue.lock().unwrap().as_mut() {
+        queue.drop_item(&item_id);
+        let to = queue.current().map(|item| item.id.clone());
+        let _ = app.emit(
+            "lair-queue-event",
+            QueueEvent::CursorAdvanced { from: item_id, to },
+        );
+    }
+}
+
+#[tauri::command]
+pub fn lair_queue_mark_done(app: AppHandle, state: State<'_, Arc<LairState>>, item_id: String) {
+    if let Some(queue) = state.queue.lock().unwrap().as_mut() {
+        queue.mark_done(&item_id);
+        let _ = app.emit(
+            "lair-queue-event",
+            QueueEvent::ItemCompleted {
+                id: item_id.clone(),
+                outcome: CompletionOutcome::Done,
+            },
+        );
+        let to = queue.current().map(|item| item.id.clone());
+        let _ = app.emit(
+            "lair-queue-event",
+            QueueEvent::CursorAdvanced { from: item_id, to },
+        );
+    }
+}
+
+#[tauri::command]
+pub fn lair_queue_edit_context(
+    state: State<'_, Arc<LairState>>,
+    item_id: String,
+    context: String,
+) {
+    if let Some(queue) = state.queue.lock().unwrap().as_mut() {
+        queue.edit_context(&item_id, &context);
+    }
+}
+
+#[tauri::command]
 pub fn lair_queue_set_autopilot(
     state: State<'_, Arc<LairState>>,
     mode: AutopilotMode,
@@ -541,10 +595,10 @@ fn agent_key(agent: &Agent) -> String {
 
 fn phase_key(phase: &Phase) -> String {
     match phase {
-        Phase::Plan => "plan",
         Phase::Implement => "implement",
         Phase::Refactor => "refactor",
         Phase::Test => "test",
+        Phase::Critique => "critique",
         Phase::Review => "review",
     }
     .to_string()

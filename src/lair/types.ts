@@ -1,6 +1,12 @@
+export interface ApprovalGate {
+  item_id: string;
+  reason: string;
+  raised_at: number;
+}
+
 export type Agent = "claude" | "codex";
 export type AgentChoice = "claude" | "codex" | "compare" | "auto";
-export type Phase = "plan" | "implement" | "refactor" | "test" | "review";
+export type Phase = "implement" | "refactor" | "test" | "critique" | "review";
 export type CardStatus = "streaming" | "summarizing" | "done" | "failed";
 export type ChecklistSection = "queue" | "done";
 
@@ -139,4 +145,18 @@ export interface LairSession {
   cards: CardData[];
   narrations: NarrationLine[];
   worktreePath?: string | null;
+}
+
+export type HubTabKind = "dashboard" | "repo";
+
+export interface HubTab {
+  id: string;
+  kind: HubTabKind;
+  label: string;
+  repo_path: string | null;
+}
+
+export interface HubState {
+  tabs: HubTab[];
+  active_tab_id: string | null;
 }
