@@ -21,6 +21,7 @@
     "opener:default",
     "log:default",
     "os:default",
+    "dialog:default",
     "notification:default",
     "store:default",
     "autostart:allow-enable",

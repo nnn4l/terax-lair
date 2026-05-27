@@ -35,7 +35,7 @@ pub struct LairState {
     pub queue: Mutex<Option<Queue>>,
     pub watcher: Mutex<Option<WatcherHandle>>,
     pub pillar_cache: Mutex<HashMap<String, String>>,
-    pub pillar_watcher: Mutex<Option<crate::lair::pillars::WatcherHandle>>,
+    pub pillar_watchers: Mutex<HashMap<String, crate::lair::pillars::WatcherHandle>>,
     pub was_all_checked: Mutex<bool>,
 }
 
@@ -45,7 +45,7 @@ impl LairState {
             queue: Mutex::new(None),
             watcher: Mutex::new(None),
             pillar_cache: Mutex::new(HashMap::new()),
-            pillar_watcher: Mutex::new(None),
+            pillar_watchers: Mutex::new(HashMap::new()),
             was_all_checked: Mutex::new(false),
         })
     }
@@ -103,8 +103,8 @@ pub async fn lair_send_message(
                 model: config.openrouter_model.clone(),
             })
             .await
-            .unwrap_or(RouteResult {
-                agent: "claude".into(),
+            .unwrap_or_else(|_| RouteResult {
+                agent: fallback_agent_for_phase(&req.phase),
                 reason: "fallback".into(),
             });
             let agent = if route.agent == "codex" {
@@ -462,22 +462,30 @@ pub async fn lair_dispatch_critiques(
             let config_c = config.inner().clone();
             let state_c = lair_state.inner().clone();
             handles.push(tauri::async_runtime::spawn(async move {
-                let _ = dispatch_one(app_c, config_c, state_c, req).await;
+                dispatch_one(app_c, config_c, state_c, req).await
             }));
         }
+        let mut errors = Vec::new();
         for handle in handles {
-            let _ = handle.await;
+            match handle.await {
+                Ok(Ok(())) => {}
+                Ok(Err(e)) => errors.push(e),
+                Err(e) => errors.push(format!("critique task join: {e}")),
+            }
+        }
+        if !errors.is_empty() {
+            return Err(errors.join("\n"));
         }
     } else {
         for item in items {
             let req = critique_request(workspace.clone(), item);
-            let _ = dispatch_one(
+            dispatch_one(
                 app.clone(),
                 config.inner().clone(),
                 lair_state.inner().clone(),
                 req,
             )
-            .await;
+            .await?;
         }
     }
     Ok(())
@@ -542,6 +550,7 @@ pub async fn lair_import_spec(
     })?;
     *state.queue.lock().unwrap() = Some(queue);
     *state.watcher.lock().unwrap() = Some(watcher);
+    *state.was_all_checked.lock().unwrap() = false;
     Ok(items)
 }
 
@@ -554,6 +563,7 @@ pub async fn lair_paste_spec(
 ) -> Result<Vec<QueueItem>, String> {
     let items = spec_import::import_pasted_spec(&workspace, &markdown, &config).await?;
     *state.queue.lock().unwrap() = Some(Queue::new(items.clone(), AutopilotMode::Task));
+    *state.was_all_checked.lock().unwrap() = false;
     Ok(items)
 }
 
@@ -730,6 +740,14 @@ fn phase_key(phase: &Phase) -> String {
     .to_string()
 }
 
+fn fallback_agent_for_phase(phase: &Phase) -> String {
+    match phase {
+        Phase::Implement | Phase::Refactor | Phase::Test | Phase::Critique => "codex",
+        Phase::Review => "claude",
+    }
+    .to_string()
+}
+
 fn read_pillars_cached(state: &Arc<LairState>, workspace: &str) -> String {
     {
         let cache = state.pillar_cache.lock().unwrap();
@@ -745,8 +763,8 @@ fn read_pillars_cached(state: &Arc<LairState>, workspace: &str) -> String {
         .unwrap()
         .insert(workspace.to_string(), text.clone());
 
-    let mut watcher_guard = state.pillar_watcher.lock().unwrap();
-    if watcher_guard.is_none() {
+    let mut watchers = state.pillar_watchers.lock().unwrap();
+    if !watchers.contains_key(workspace) {
         let state_for_watcher = state.clone();
         let workspace_owned = workspace.to_string();
         if let Ok(handle) = pillars::watch_pillars(workspace, move || {
@@ -756,7 +774,7 @@ fn read_pillars_cached(state: &Arc<LairState>, workspace: &str) -> String {
                 .unwrap()
                 .remove(&workspace_owned);
         }) {
-            *watcher_guard = Some(handle);
+            watchers.insert(workspace.to_string(), handle);
         }
     }
 
