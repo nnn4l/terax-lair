@@ -80,7 +80,7 @@ export function AgentDropdown() {
           />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="min-w-56 rounded-xl">
+      <DropdownMenuContent align="start" className="min-w-72 rounded-xl">
         <div className="px-2 pt-1.5 pb-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
           CLI agent
         </div>
@@ -104,13 +104,25 @@ export function AgentDropdown() {
 }
 
 function ModelSettingsRow({ agent }: { agent: Agent }) {
+  const Icon = agent === "claude" ? ClaudeIcon : CodeIcon;
+  const description =
+    agent === "claude" ? "Model and effort for Claude runs" : "Effort for Codex CLI runs";
   return (
-    <div className="flex items-center justify-between gap-2 px-2 py-1">
-      <span className="w-12 shrink-0 text-[10.5px] font-medium capitalize text-muted-foreground">
-        {agent}
+    <div className="mx-1 my-0.5 flex min-h-9 items-center gap-2 rounded-md px-2 py-1.5 text-[12px] hover:bg-accent/35">
+      <HugeiconsIcon
+        icon={Icon}
+        size={13}
+        strokeWidth={1.75}
+        className="shrink-0 text-muted-foreground"
+      />
+      <span className="flex min-w-0 flex-1 flex-col">
+        <span className="capitalize text-foreground/90">{agent}</span>
+        <span className="line-clamp-1 text-[10.5px] text-muted-foreground">
+          {description}
+        </span>
       </span>
-      <div className="min-w-0 flex-1">
-        <ModelDropdown agent={agent} />
+      <div className="min-w-0 shrink-0">
+        <ModelDropdown agent={agent} variant="menu" />
       </div>
     </div>
   );

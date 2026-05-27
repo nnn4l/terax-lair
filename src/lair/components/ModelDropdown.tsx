@@ -43,7 +43,13 @@ const EFFORTS = [
 
 const REFETCH_TTL_MS = 24 * 60 * 60 * 1000;
 
-export function ModelDropdown({ agent }: { agent: Agent }) {
+export function ModelDropdown({
+  agent,
+  variant = "standalone",
+}: {
+  agent: Agent;
+  variant?: "standalone" | "menu";
+}) {
   const claudeModel = useLair((s) => s.claudeModel);
   const codexModel = useLair((s) => s.codexModel);
   const claudeEffort = useLair((s) => s.claudeEffort);
@@ -90,9 +96,21 @@ export function ModelDropdown({ agent }: { agent: Agent }) {
   }, [isCodex, model, setCodexModel]);
 
   const effortDisabled = !isCodex && (!model || EFFORT_UNSUPPORTED.has(model));
+  const outerClass =
+    variant === "menu"
+      ? "flex h-6 items-center justify-end gap-1"
+      : "flex h-6 items-center gap-1 rounded-md border border-border/50 bg-background/65 px-1";
+  const modelTriggerClass =
+    variant === "menu"
+      ? "h-5 max-w-[8.75rem] min-w-[5.75rem] justify-end gap-1 rounded-md border-0 bg-transparent px-1 py-0 text-[10.5px] font-medium text-foreground/85 shadow-none hover:bg-accent/60 [&>svg]:size-3"
+      : "h-5 max-w-[10rem] min-w-[6.75rem] gap-1 rounded-sm border-0 bg-transparent px-1 py-0 text-[10.5px] font-medium text-foreground/85 shadow-none hover:bg-muted/70 [&>svg]:size-3";
+  const effortTriggerClass =
+    variant === "menu"
+      ? "h-5 min-w-[3.75rem] justify-end gap-1 rounded-md border-0 bg-transparent px-1 py-0 text-[10.5px] font-medium text-foreground/85 shadow-none hover:bg-accent/60 disabled:opacity-40 [&>svg]:size-3"
+      : "h-5 min-w-[4.25rem] gap-1 rounded-sm border-0 bg-transparent px-1 py-0 text-[10.5px] font-medium text-foreground/85 shadow-none hover:bg-muted/70 disabled:opacity-40 [&>svg]:size-3";
 
   return (
-    <div className="flex h-6 items-center gap-1 rounded-md border border-border/50 bg-background/65 px-1">
+    <div className={outerClass}>
       {!isCodex ? (
         <Select
           value={model ?? "__none__"}
@@ -104,7 +122,7 @@ export function ModelDropdown({ agent }: { agent: Agent }) {
         >
           <SelectTrigger
             size="sm"
-            className="h-5 max-w-[10rem] min-w-[6.75rem] gap-1 rounded-sm border-0 bg-transparent px-1 py-0 text-[10.5px] font-medium text-foreground/85 shadow-none hover:bg-muted/70 [&>svg]:size-3"
+            className={modelTriggerClass}
             title={`${agent} model`}
           >
             <SelectValue placeholder="model" />
@@ -139,7 +157,7 @@ export function ModelDropdown({ agent }: { agent: Agent }) {
       >
         <SelectTrigger
           size="sm"
-          className="h-5 min-w-[4.25rem] gap-1 rounded-sm border-0 bg-transparent px-1 py-0 text-[10.5px] font-medium text-foreground/85 shadow-none hover:bg-muted/70 disabled:opacity-40 [&>svg]:size-3"
+          className={effortTriggerClass}
           title={
             effortDisabled
               ? !model
