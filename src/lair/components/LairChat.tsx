@@ -582,41 +582,26 @@ export function TurnView({
 
   return (
     <div className="group/turn flex flex-col gap-2">
-      <div data-lair-role="user" className="flex justify-end">
+      <div data-lair-role="user" className="flex flex-col items-end gap-1">
         <div className="max-w-[88%] rounded-lg rounded-br-sm border border-border/50 bg-muted/60 px-2.5 py-2 shadow-sm">
           <p className="whitespace-pre-wrap text-[13px] font-medium leading-relaxed text-foreground/90">
             {turn.prompt}
           </p>
-          <div className="mt-1 flex justify-end opacity-0 transition-opacity group-hover/turn:opacity-100 focus-within:opacity-100">
-            <IconButton
-              label="Edit prompt"
-              title="Edit prompt"
-              onClick={() => onEdit(turn.prompt)}
-              icon={PencilEdit02Icon}
-            />
-          </div>
+        </div>
+        <div className="pr-0.5 opacity-0 transition-opacity group-hover/turn:opacity-100 focus-within:opacity-100">
+          <IconButton
+            label="Edit prompt"
+            title="Edit prompt"
+            onClick={() => onEdit(turn.prompt)}
+            icon={PencilEdit02Icon}
+          />
         </div>
       </div>
       <div data-lair-role="assistant" className="flex flex-col gap-1.5">
-        <div className="flex items-center justify-between gap-2 px-0.5">
+        <div className="px-0.5">
           <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground/60">
             Response
           </span>
-          <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover/turn:opacity-100 focus-within:opacity-100">
-            <IconButton
-              label="Copy assistant response"
-              title="Copy response"
-              onClick={() => void copyTurnResponse(turnCards)}
-              icon={CopyIcon}
-              disabled={turnCards.length === 0}
-            />
-            <IconButton
-              label="Retry prompt"
-              title="Retry"
-              onClick={() => onRetry(turn.prompt)}
-              icon={Refresh01Icon}
-            />
-          </div>
         </div>
         {turnNarrations.map((n) => (
           <NarrationLine key={n.id} line={n} />
@@ -627,6 +612,21 @@ export function TurnView({
         {turnCards.length === 0 && turnNarrations.length === 0 ? (
           <ThinkingState />
         ) : null}
+        <div className="flex items-center gap-1 px-0.5 opacity-0 transition-opacity group-hover/turn:opacity-100 focus-within:opacity-100">
+          <IconButton
+            label="Copy assistant response"
+            title="Copy response"
+            onClick={() => void copyTurnResponse(turnCards)}
+            icon={CopyIcon}
+            disabled={turnCards.length === 0}
+          />
+          <IconButton
+            label="Retry prompt"
+            title="Retry"
+            onClick={() => onRetry(turn.prompt)}
+            icon={Refresh01Icon}
+          />
+        </div>
       </div>
     </div>
   );
