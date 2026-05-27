@@ -5,6 +5,7 @@ pub mod keychain;
 pub mod narrator;
 pub mod orchestrator;
 pub mod parser_client;
+pub mod pillars;
 pub mod phase_prompts;
 pub mod queue;
 pub mod spec_import;
