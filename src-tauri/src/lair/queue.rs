@@ -101,6 +101,64 @@ impl Queue {
         self.pending_gate.take()
     }
 
+    pub fn drop_item(&mut self, id: &str) {
+        Self::remove_id(&mut self.items, id);
+        if self.cursor.as_deref() == Some(id) {
+            self.cursor = self.find_first_unchecked_leaf();
+        }
+    }
+
+    pub fn mark_done(&mut self, id: &str) {
+        Self::set_checked(&mut self.items, id, true);
+        if self.cursor.as_deref() == Some(id) {
+            self.cursor = self.find_first_unchecked_leaf();
+        }
+    }
+
+    pub fn edit_context(&mut self, id: &str, context: &str) {
+        Self::set_context(&mut self.items, id, context);
+    }
+
+    pub fn all_leaves_checked(&self) -> bool {
+        fn dfs(items: &[QueueItem]) -> bool {
+            items.iter().all(|item| {
+                if item.children.is_empty() {
+                    item.checked
+                } else {
+                    dfs(&item.children)
+                }
+            })
+        }
+        dfs(&self.items)
+    }
+
+    fn remove_id(items: &mut Vec<QueueItem>, id: &str) {
+        items.retain(|item| item.id != id);
+        for item in items {
+            Self::remove_id(&mut item.children, id);
+        }
+    }
+
+    fn set_checked(items: &mut [QueueItem], id: &str, value: bool) {
+        for item in items {
+            if item.id == id {
+                item.checked = value;
+                return;
+            }
+            Self::set_checked(&mut item.children, id, value);
+        }
+    }
+
+    fn set_context(items: &mut [QueueItem], id: &str, context: &str) {
+        for item in items {
+            if item.id == id {
+                item.context = context.to_string();
+                return;
+            }
+            Self::set_context(&mut item.children, id, context);
+        }
+    }
+
     fn find_first_unchecked_leaf(&self) -> Option<String> {
         fn dfs(items: &[QueueItem]) -> Option<String> {
             for item in items {
@@ -181,4 +239,80 @@ fn contains_id(items: &[QueueItem], id: &str) -> bool {
         }
     }
     false
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn mk_item(id: &str, children: Vec<QueueItem>) -> QueueItem {
+        QueueItem {
+            id: id.to_string(),
+            label: id.to_string(),
+            context: String::new(),
+            source: None,
+            agent_hint: None,
+            children,
+            checked: false,
+            stale: false,
+        }
+    }
+
+    #[test]
+    fn drop_removes_item() {
+        let items = vec![mk_item("a", vec![]), mk_item("b", vec![])];
+        let mut q = Queue::new(items, AutopilotMode::Off);
+        q.drop_item("a");
+        assert_eq!(q.items().len(), 1);
+        assert_eq!(q.items()[0].id, "b");
+    }
+
+    #[test]
+    fn mark_done_checks_item() {
+        let items = vec![mk_item("a", vec![])];
+        let mut q = Queue::new(items, AutopilotMode::Off);
+        q.mark_done("a");
+        assert!(q.items()[0].checked);
+    }
+
+    #[test]
+    fn edit_context_replaces_context() {
+        let items = vec![mk_item("a", vec![])];
+        let mut q = Queue::new(items, AutopilotMode::Off);
+        q.edit_context("a", "new context");
+        assert_eq!(q.items()[0].context, "new context");
+    }
+
+    #[test]
+    fn all_leaves_checked_empty_queue_returns_true() {
+        let q = Queue::new(vec![], AutopilotMode::Off);
+        assert!(q.all_leaves_checked());
+    }
+
+    #[test]
+    fn all_leaves_checked_returns_false_when_any_leaf_unchecked() {
+        let items = vec![mk_item("a", vec![]), mk_item("b", vec![])];
+        let mut q = Queue::new(items, AutopilotMode::Off);
+        q.mark_done("a");
+        assert!(!q.all_leaves_checked());
+    }
+
+    #[test]
+    fn all_leaves_checked_returns_true_when_every_leaf_checked() {
+        let items = vec![mk_item("a", vec![]), mk_item("b", vec![])];
+        let mut q = Queue::new(items, AutopilotMode::Off);
+        q.mark_done("a");
+        q.mark_done("b");
+        assert!(q.all_leaves_checked());
+    }
+
+    #[test]
+    fn all_leaves_checked_recurses_into_children() {
+        let leaf = mk_item("leaf", vec![]);
+        let parent = mk_item("parent", vec![leaf]);
+        let mut q = Queue::new(vec![parent], AutopilotMode::Off);
+        assert!(!q.all_leaves_checked());
+        q.mark_done("leaf");
+        assert!(q.all_leaves_checked());
+    }
 }
