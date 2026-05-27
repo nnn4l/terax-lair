@@ -11,11 +11,13 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
+import { ModelDropdown } from "@/lair/components/ModelDropdown";
 import { useLair } from "@/lair/state";
-import type { AgentChoice } from "@/lair/types";
+import type { Agent, AgentChoice } from "@/lair/types";
 
 const CHOICES: {
   value: AgentChoice;
@@ -54,6 +56,10 @@ export function AgentDropdown() {
   const setChoice = useLair((state) => state.setAgentChoice);
   const active = CHOICES.find((item) => item.value === choice) ?? CHOICES[0];
   const ActiveIcon = active.icon;
+  const showsClaude =
+    choice === "claude" || choice === "auto" || choice === "compare";
+  const showsCodex =
+    choice === "codex" || choice === "auto" || choice === "compare";
 
   return (
     <DropdownMenu>
@@ -86,8 +92,27 @@ export function AgentDropdown() {
             onSelect={() => setChoice(item.value)}
           />
         ))}
+        <DropdownMenuSeparator />
+        <div className="px-2 pt-1 pb-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+          Run settings
+        </div>
+        {showsClaude ? <ModelSettingsRow agent="claude" /> : null}
+        {showsCodex ? <ModelSettingsRow agent="codex" /> : null}
       </DropdownMenuContent>
     </DropdownMenu>
+  );
+}
+
+function ModelSettingsRow({ agent }: { agent: Agent }) {
+  return (
+    <div className="flex items-center justify-between gap-2 px-2 py-1">
+      <span className="w-12 shrink-0 text-[10.5px] font-medium capitalize text-muted-foreground">
+        {agent}
+      </span>
+      <div className="min-w-0 flex-1">
+        <ModelDropdown agent={agent} />
+      </div>
+    </div>
   );
 }
 
