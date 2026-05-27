@@ -54,7 +54,7 @@ describe("lair state", () => {
 
     const first = state.newSession("Feature A");
     useLair.getState().setWorkspace("C:/repo/a");
-    useLair.getState().setPhase("plan");
+    useLair.getState().setPhase("implement");
     useLair.getState().setAgentChoice("claude");
     useLair.getState().startTurn("first turn");
 
@@ -66,7 +66,7 @@ describe("lair state", () => {
 
     useLair.getState().switchSession(first);
     expect(useLair.getState().workspace).toBe("C:/repo/a");
-    expect(useLair.getState().phase).toBe("plan");
+    expect(useLair.getState().phase).toBe("implement");
     expect(useLair.getState().agentChoice).toBe("claude");
     expect(useLair.getState().turns.map((t) => t.prompt)).toEqual([
       "first turn",

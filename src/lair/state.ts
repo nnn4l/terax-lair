@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type {
   AgentChoice,
+  ApprovalGate,
   CardData,
   ChecklistData,
   AutopilotMode,
@@ -38,8 +39,12 @@ interface LairState {
   };
   staleReports: StaleReport[];
   staleSpecFile: string | null;
+  pendingGate: ApprovalGate | null;
   models: ModelInfo[];
   modelsFetchedAt: number;
+  critiqueDrafts: string[];
+  critiqueTrayOpen: boolean;
+  pillarCheckPending: boolean;
 
   upsertCard: (card: CardData, turnId?: string) => void;
   appendChunk: (id: string, chunk: string) => void;
@@ -59,7 +64,14 @@ interface LairState {
   setAutopilotPaused: (paused: boolean) => void;
   setStopOnFailure: (stopOnFailure: boolean) => void;
   setStaleReports: (reports: StaleReport[], specFile?: string | null) => void;
+  setPendingGate: (gate: ApprovalGate | null) => void;
   setModels: (models: ModelInfo[]) => void;
+  setCritiqueDrafts: (drafts: string[]) => void;
+  appendCritiqueDraft: (text: string) => void;
+  clearCritiqueDrafts: () => void;
+  toggleCritiqueTray: () => void;
+  setCritiqueTrayOpen: (open: boolean) => void;
+  setPillarCheckPending: (pending: boolean) => void;
   newSession: (title?: string) => string;
   switchSession: (id: string) => void;
   deleteSession: (id: string) => void;
@@ -90,6 +102,28 @@ function titleFromPrompt(prompt: string): string {
   return oneLine.length > 34 ? `${oneLine.slice(0, 34)}...` : oneLine;
 }
 
+function migratePhase(value: unknown): Phase {
+  return value === "plan" ? "implement" : (value as Phase);
+}
+
+function migratePersistedState(persistedState: unknown): unknown {
+  if (typeof persistedState !== "object" || persistedState === null) {
+    return persistedState;
+  }
+  const obj = persistedState as Record<string, unknown>;
+  obj.phase = migratePhase(obj.phase);
+  if (Array.isArray(obj.sessions)) {
+    obj.sessions = obj.sessions.map((session) => {
+      if (typeof session !== "object" || session === null) {
+        return session;
+      }
+      const s = session as Record<string, unknown>;
+      return { ...s, phase: migratePhase(s.phase) };
+    });
+  }
+  return obj;
+}
+
 export const useLair = create<LairState>()(
   persist(
     (set) => ({
@@ -111,9 +145,13 @@ export const useLair = create<LairState>()(
       cursor: { itemId: null, pinned: false },
       autopilot: { mode: "task", paused: false, stopOnFailure: true },
       staleReports: [],
+      pendingGate: null,
       staleSpecFile: null,
       models: [],
       modelsFetchedAt: 0,
+      critiqueDrafts: [],
+      critiqueTrayOpen: false,
+      pillarCheckPending: false,
 
       upsertCard: (card, turnId) =>
         set((state) => {
@@ -242,8 +280,18 @@ export const useLair = create<LairState>()(
         })),
       setStaleReports: (staleReports, staleSpecFile = null) =>
         set({ staleReports, staleSpecFile }),
+      setPendingGate: (pendingGate) => set({ pendingGate }),
       setModels: (models) =>
         set({ models, modelsFetchedAt: Date.now() }),
+      setCritiqueDrafts: (critiqueDrafts) => set({ critiqueDrafts }),
+      appendCritiqueDraft: (text) =>
+        set((state) => ({ critiqueDrafts: [...state.critiqueDrafts, text] })),
+      clearCritiqueDrafts: () => set({ critiqueDrafts: [] }),
+      toggleCritiqueTray: () =>
+        set((state) => ({ critiqueTrayOpen: !state.critiqueTrayOpen })),
+      setCritiqueTrayOpen: (critiqueTrayOpen) => set({ critiqueTrayOpen }),
+      setPillarCheckPending: (pillarCheckPending) =>
+        set({ pillarCheckPending }),
       newSession: (title) => {
         const now = Date.now();
         const id = createId("s");
@@ -377,6 +425,8 @@ export const useLair = create<LairState>()(
     }),
     {
       name: "lair-state",
+      version: 2,
+      migrate: migratePersistedState,
       partialize: (state) => ({
         cards: state.cards,
         narrations: state.narrations,
@@ -393,6 +443,8 @@ export const useLair = create<LairState>()(
         codexEffort: state.codexEffort,
         models: state.models,
         modelsFetchedAt: state.modelsFetchedAt,
+        critiqueDrafts: state.critiqueDrafts,
+        critiqueTrayOpen: state.critiqueTrayOpen,
       }),
     },
   ),

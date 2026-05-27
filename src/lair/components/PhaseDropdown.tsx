@@ -8,7 +8,7 @@ import {
 import { useLair } from "@/lair/state";
 import type { Phase } from "@/lair/types";
 
-const PHASES: Phase[] = ["plan", "implement", "refactor", "test", "review"];
+const PHASES: Phase[] = ["implement", "refactor", "test", "critique", "review"];
 
 export function PhaseDropdown() {
   const phase = useLair((state) => state.phase);

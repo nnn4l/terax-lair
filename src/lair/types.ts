@@ -107,6 +107,15 @@ export interface StaleReport {
   diff_summary: string;
 }
 
+export interface PillarFinding {
+  pillar: string;
+  violation: string;
+}
+
+export interface SpecCompleteEvent {
+  spec_anchor: string;
+}
+
 export interface QueueContext {
   item_id: string;
   label: string;

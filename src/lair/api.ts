@@ -4,12 +4,15 @@ import type {
   CardUpdateEvent,
   ChecklistData,
   ChecklistSection,
+  HubState,
   ModelInfo,
   NarrationEvent,
   AutopilotMode,
+  PillarFinding,
   QueueEvent,
   QueueItem,
   SendMessageRequest,
+  SpecCompleteEvent,
   StaleReport,
   StreamChunkEvent,
   Worktree,
@@ -89,6 +92,22 @@ export async function listModels(): Promise<ModelInfo[]> {
   return await invoke<ModelInfo[]>("lair_list_models");
 }
 
+export async function listHubTabs(): Promise<HubState> {
+  return await invoke<HubState>("lair_list_hub_tabs");
+}
+
+export async function openRepoTab(repoPath: string): Promise<HubState> {
+  return await invoke<HubState>("lair_open_repo_tab", { repoPath });
+}
+
+export async function closeHubTab(tabId: string): Promise<HubState> {
+  return await invoke<HubState>("lair_close_hub_tab", { tabId });
+}
+
+export async function switchHubTab(tabId: string): Promise<HubState> {
+  return await invoke<HubState>("lair_switch_hub_tab", { tabId });
+}
+
 export async function importSpec(
   workspace: string,
   path: string,
@@ -143,6 +162,22 @@ export async function queueCheckStale(): Promise<StaleReport[]> {
   return await invoke<StaleReport[]>("lair_queue_check_stale");
 }
 
+export async function queueApprove(): Promise<void> {
+  await invoke("lair_queue_resume");
+}
+
+export async function queueDrop(itemId: string): Promise<void> {
+  await invoke("lair_queue_drop", { itemId });
+}
+
+export async function queueMarkDone(itemId: string): Promise<void> {
+  await invoke("lair_queue_mark_done", { itemId });
+}
+
+export async function queueEditContext(itemId: string, context: string): Promise<void> {
+  await invoke("lair_queue_edit_context", { itemId, context });
+}
+
 export async function onQueueEvent(
   cb: (event: QueueEvent) => void,
 ): Promise<UnlistenFn> {
@@ -155,6 +190,32 @@ export async function onSpecChanged(
   cb: (file: string) => void,
 ): Promise<UnlistenFn> {
   return await listen<string>("lair-spec-changed", (event) =>
+    cb(event.payload),
+  );
+}
+
+export async function readPillars(workspace: string): Promise<string> {
+  return await invoke<string>("lair_read_pillars", { workspace });
+}
+
+export async function runPillarCheck(
+  workspace: string,
+): Promise<PillarFinding[]> {
+  return await invoke<PillarFinding[]>("lair_run_pillar_check", { workspace });
+}
+
+export async function dispatchCritiques(
+  workspace: string,
+  items: string[],
+  mode: "linear" | "parallel",
+): Promise<void> {
+  await invoke("lair_dispatch_critiques", { workspace, items, mode });
+}
+
+export async function onSpecComplete(
+  cb: (event: SpecCompleteEvent) => void,
+): Promise<UnlistenFn> {
+  return await listen<SpecCompleteEvent>("lair-spec-complete", (event) =>
     cb(event.payload),
   );
 }
