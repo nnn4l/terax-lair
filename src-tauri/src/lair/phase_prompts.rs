@@ -2,11 +2,6 @@ use crate::lair::types::{Agent, Phase};
 
 pub fn system_prompt_for(phase: &Phase, agent: &Agent) -> String {
     match (phase, agent) {
-        (Phase::Plan, _) => {
-            "You are in PLAN phase. Produce a numbered implementation plan \
-with clearly scoped tasks. No code yet. Flag all unknowns and risks before writing anything."
-                .into()
-        }
         (Phase::Implement, Agent::Claude) => {
             "You are in IMPLEMENT phase. Write working code. \
 Follow existing patterns and conventions exactly. \
@@ -36,6 +31,17 @@ Prefer unit tests; add integration tests only for cross-boundary invariants."
             "TEST phase. Write tests. Do not change production code unless blocking. \
 Unit first, integration only at boundaries.".into()
         }
+        (Phase::Critique, Agent::Claude) => {
+            "You are in CRITIQUE phase. The user is critiquing this implementation. \
+Each user message describes a concrete change they want applied. \
+Apply the change directly. Re-read the design pillars before each edit; pillars are anchors. \
+Be terse in any narration. Code over commentary."
+                .into()
+        }
+        (Phase::Critique, Agent::Codex) => {
+            "CRITIQUE phase. User describes concrete changes; apply them. \
+Re-read pillars before each edit. No commentary unless asked.".into()
+        }
         (Phase::Review, _) => {
             "You are in REVIEW phase. Read the code critically. \
 Report bugs, security issues, and design problems. \
@@ -52,10 +58,10 @@ mod tests {
     #[test]
     fn all_combinations_non_empty() {
         for phase in [
-            Phase::Plan,
             Phase::Implement,
             Phase::Refactor,
             Phase::Test,
+            Phase::Critique,
             Phase::Review,
         ] {
             for agent in [Agent::Claude, Agent::Codex] {
@@ -69,5 +75,17 @@ mod tests {
     fn refactor_forbids_new_features() {
         let p = system_prompt_for(&Phase::Refactor, &Agent::Claude);
         assert!(p.contains("No new features"));
+    }
+
+    #[test]
+    fn critique_mentions_pillars() {
+        let p = system_prompt_for(&Phase::Critique, &Agent::Claude);
+        assert!(p.contains("pillars"));
+    }
+
+    #[test]
+    fn implement_codex_terse() {
+        let p = system_prompt_for(&Phase::Implement, &Agent::Codex);
+        assert!(p.len() < 200);
     }
 }
