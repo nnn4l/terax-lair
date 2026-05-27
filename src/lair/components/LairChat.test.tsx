@@ -11,8 +11,9 @@ import type { CardData } from "@/lair/types";
 describe("LairChat components", () => {
   test("agent picker defaults to text-only Codex-first choices", () => {
     const html = renderToStaticMarkup(<AgentDropdown />);
-    expect(html).toContain('role="combobox"');
-    expect(html).toContain('data-slot="select-trigger"');
+    expect(html).toContain('data-slot="dropdown-menu-trigger"');
+    expect(html).toContain("CLI agent: Codex");
+    expect(html).toContain("Codex");
     expect(html).not.toContain("<option");
   });
 

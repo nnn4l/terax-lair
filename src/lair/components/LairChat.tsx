@@ -13,9 +13,7 @@ import {
 import { useLair } from "@/lair/state";
 import { AgentDropdown } from "@/lair/components/AgentDropdown";
 import { Card } from "@/lair/components/Card";
-import { ModelDropdown } from "@/lair/components/ModelDropdown";
 import { NarrationLine } from "@/lair/components/NarrationLine";
-import { PhaseDropdown } from "@/lair/components/PhaseDropdown";
 import {
   Select,
   SelectContent,
@@ -171,12 +169,6 @@ export function LairChat({ onClose }: { onClose?: () => void }) {
       ].join(":"),
     [turns.length, cards, narrations.length, error],
   );
-  const showsClaude =
-    agentChoice === "claude" || agentChoice === "auto" || agentChoice === "compare";
-  const showsCodex =
-    agentChoice === "codex" || agentChoice === "auto" || agentChoice === "compare";
-  const showsBoth = showsClaude && showsCodex;
-
   useEffect(() => {
     if (!stickToBottomRef.current) return;
     const el = threadRef.current;
@@ -384,23 +376,6 @@ export function LairChat({ onClose }: { onClose?: () => void }) {
         )}
       </div>
 
-      {showsClaude || showsCodex ? (
-        <div className="flex flex-col gap-1 border-t border-border/40 bg-muted/20 px-3 py-2">
-          <div className="flex items-center gap-2">
-            <PhaseDropdown />
-            <AgentDropdown />
-          </div>
-          <div className="flex min-w-0 items-center gap-2">
-            {showsClaude ? (
-              <ModelRow label={showsBoth ? "claude" : undefined} agent="claude" />
-            ) : null}
-            {showsCodex ? (
-              <ModelRow label={showsBoth ? "codex" : undefined} agent="codex" />
-            ) : null}
-          </div>
-        </div>
-      ) : null}
-
       <div className="border-t border-border/60 bg-card/80 px-3 pt-2 pb-3">
         <div className="relative rounded-md border border-border bg-background focus-within:ring-1 focus-within:ring-ring">
           <textarea
@@ -418,7 +393,9 @@ export function LairChat({ onClose }: { onClose?: () => void }) {
             }}
           />
           <div className="pointer-events-none absolute inset-x-2 bottom-2 flex items-center justify-between">
-            <div />
+            <div className="pointer-events-auto">
+              <AgentDropdown />
+            </div>
             <button
               type="button"
               className="pointer-events-auto flex h-6 items-center gap-1.5 rounded-md bg-primary px-2 text-[11px] font-medium text-primary-foreground disabled:opacity-40"
@@ -697,21 +674,3 @@ function findQueueItem(items: QueueItem[], id: string): QueueItem | null {
   return null;
 }
 
-function ModelRow({
-  label,
-  agent,
-}: {
-  label?: string;
-  agent: "claude" | "codex";
-}) {
-  return (
-    <div className="flex items-center gap-2">
-      {label ? (
-        <span className="w-12 shrink-0 text-[10px] uppercase tracking-wide text-muted-foreground/60">
-          {label}
-        </span>
-      ) : null}
-      <ModelDropdown agent={agent} />
-    </div>
-  );
-}
