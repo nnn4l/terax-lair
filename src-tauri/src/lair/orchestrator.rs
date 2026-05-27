@@ -11,14 +11,21 @@ use crate::lair::parser_client::{
     SummarizeRequest,
 };
 use crate::lair::phase_prompts::system_prompt_for;
+use crate::lair::pillars;
 use crate::lair::queue::Queue;
 use crate::lair::{doc_watcher, spec_import};
 use crate::lair::types::*;
 use crate::lair::usage_parser::parse_usage;
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::{async_runtime, AppHandle, Emitter, State};
 use uuid::Uuid;
+
+#[derive(serde::Serialize, Clone)]
+struct SpecCompleteEvent {
+    spec_anchor: String,
+}
 
 pub struct LairConfig {
     pub openrouter_model: String,
@@ -27,6 +34,9 @@ pub struct LairConfig {
 pub struct LairState {
     pub queue: Mutex<Option<Queue>>,
     pub watcher: Mutex<Option<WatcherHandle>>,
+    pub pillar_cache: Mutex<HashMap<String, String>>,
+    pub pillar_watcher: Mutex<Option<crate::lair::pillars::WatcherHandle>>,
+    pub was_all_checked: Mutex<bool>,
 }
 
 impl LairState {
@@ -34,6 +44,9 @@ impl LairState {
         Arc::new(Self {
             queue: Mutex::new(None),
             watcher: Mutex::new(None),
+            pillar_cache: Mutex::new(HashMap::new()),
+            pillar_watcher: Mutex::new(None),
+            was_all_checked: Mutex::new(false),
         })
     }
 }
@@ -142,7 +155,13 @@ async fn spawn(
     let id = Uuid::new_v4().to_string();
     let model = model_for(&agent, req);
     let effort = effort_for(&agent, req);
-    let system_prompt = system_prompt_for(&req.phase, &agent);
+    let phase_prompt = system_prompt_for(&req.phase, &agent);
+    let pillars = read_pillars_cached(&lair_state, &req.workspace);
+    let system_prompt = if pillars.trim().is_empty() {
+        phase_prompt
+    } else {
+        format!("{phase_prompt}\n\n## Design Pillars (do not violate)\n{pillars}")
+    };
 
     let _ = app.emit(
         "lair-card-update",
@@ -249,7 +268,7 @@ async fn spawn(
                     "lair-queue-event",
                     QueueEvent::BlockedAwaitingApproval {
                         id: ctx.item_id.clone(),
-                        reason: "agent timed out \u{2014} investigate and resume".to_string(),
+                        reason: "agent timed out - investigate and resume".to_string(),
                     },
                 );
             } else {
@@ -284,6 +303,27 @@ async fn spawn(
                     );
                 }
             }
+        }
+    }
+
+    if let Some(ctx) = &req.task_context {
+        let guard = lair_state.queue.lock().unwrap();
+        let now_all = guard
+            .as_ref()
+            .map(|q| q.all_leaves_checked())
+            .unwrap_or(false);
+        let mut prev_guard = lair_state.was_all_checked.lock().unwrap();
+        let prev_all = *prev_guard;
+        *prev_guard = now_all;
+        drop(guard);
+        drop(prev_guard);
+        if now_all && !prev_all && req.phase == Phase::Implement {
+            let _ = app.emit(
+                "lair-spec-complete",
+                SpecCompleteEvent {
+                    spec_anchor: ctx.item_id.clone(),
+                },
+            );
         }
     }
 
@@ -355,6 +395,92 @@ async fn spawn(
 #[tauri::command]
 pub async fn lair_list_models() -> Result<Vec<ModelInfo>, String> {
     list_models().await
+}
+
+#[tauri::command]
+pub fn lair_read_pillars(workspace: String) -> Result<String, String> {
+    pillars::read_pillars(&workspace)
+}
+
+#[tauri::command]
+pub async fn lair_run_pillar_check(
+    config: State<'_, Arc<LairConfig>>,
+    state: State<'_, Arc<LairState>>,
+    workspace: String,
+) -> Result<Vec<crate::lair::types::PillarFinding>, String> {
+    let pillars_text = pillars::read_pillars(&workspace)?;
+    let api_key = get_openrouter_key()?;
+    let model = config.openrouter_model.clone();
+
+    let recent_summary = {
+        let guard = state.queue.lock().unwrap();
+        match guard.as_ref() {
+            None => String::new(),
+            Some(queue) => {
+                let mut lines: Vec<String> = Vec::new();
+                fn walk(items: &[crate::lair::types::QueueItem], lines: &mut Vec<String>) {
+                    for item in items {
+                        if item.checked {
+                            lines.push(format!("- {}: {}", item.label, item.context));
+                        }
+                        walk(&item.children, lines);
+                    }
+                }
+                walk(queue.items(), &mut lines);
+                lines.join("\n")
+            }
+        }
+    };
+
+    crate::lair::pillar_check::run_pillar_check(crate::lair::pillar_check::PillarCheckRequest {
+        pillars: pillars_text,
+        recent_summary,
+        api_key,
+        model,
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn lair_dispatch_critiques(
+    app: AppHandle,
+    config: State<'_, Arc<LairConfig>>,
+    checklist_watcher: State<'_, ChecklistWatcher>,
+    lair_state: State<'_, Arc<LairState>>,
+    workspace: String,
+    items: Vec<String>,
+    mode: String,
+) -> Result<(), String> {
+    let _ = checklist_watcher;
+    let parallel = mode == "parallel";
+
+    if parallel {
+        let mut handles = Vec::new();
+        for item in items {
+            let req = critique_request(workspace.clone(), item);
+            let app_c = app.clone();
+            let config_c = config.inner().clone();
+            let state_c = lair_state.inner().clone();
+            handles.push(tauri::async_runtime::spawn(async move {
+                let _ = dispatch_one(app_c, config_c, state_c, req).await;
+            }));
+        }
+        for handle in handles {
+            let _ = handle.await;
+        }
+    } else {
+        for item in items {
+            let req = critique_request(workspace.clone(), item);
+            let _ = dispatch_one(
+                app.clone(),
+                config.inner().clone(),
+                lair_state.inner().clone(),
+                req,
+            )
+            .await;
+        }
+    }
+    Ok(())
 }
 
 // ---- checklist commands ----
@@ -602,6 +728,69 @@ fn phase_key(phase: &Phase) -> String {
         Phase::Review => "review",
     }
     .to_string()
+}
+
+fn read_pillars_cached(state: &Arc<LairState>, workspace: &str) -> String {
+    {
+        let cache = state.pillar_cache.lock().unwrap();
+        if let Some(text) = cache.get(workspace) {
+            return text.clone();
+        }
+    }
+
+    let text = pillars::read_pillars(workspace).unwrap_or_default();
+    state
+        .pillar_cache
+        .lock()
+        .unwrap()
+        .insert(workspace.to_string(), text.clone());
+
+    let mut watcher_guard = state.pillar_watcher.lock().unwrap();
+    if watcher_guard.is_none() {
+        let state_for_watcher = state.clone();
+        let workspace_owned = workspace.to_string();
+        if let Ok(handle) = pillars::watch_pillars(workspace, move || {
+            state_for_watcher
+                .pillar_cache
+                .lock()
+                .unwrap()
+                .remove(&workspace_owned);
+        }) {
+            *watcher_guard = Some(handle);
+        }
+    }
+
+    text
+}
+
+fn critique_request(workspace: String, prompt: String) -> SendMessageRequest {
+    SendMessageRequest {
+        turn_id: Uuid::new_v4().to_string(),
+        prompt,
+        agent_choice: AgentChoice::Codex,
+        phase: Phase::Critique,
+        workspace,
+        task_context: None,
+        claude_model: None,
+        codex_model: None,
+        claude_effort: None,
+        codex_effort: None,
+    }
+}
+
+async fn dispatch_one(
+    app: AppHandle,
+    config: Arc<LairConfig>,
+    lair_state: Arc<LairState>,
+    req: SendMessageRequest,
+) -> Result<(), String> {
+    let agent = match req.agent_choice {
+        AgentChoice::Claude => Agent::Claude,
+        AgentChoice::Codex => Agent::Codex,
+        AgentChoice::Compare | AgentChoice::Auto => Agent::Codex,
+    };
+    let _ = spawn(app, config, lair_state, agent, &req).await?;
+    Ok(())
 }
 
 pub fn scan_for_result_marker(output: &str) -> Option<CompletionOutcome> {

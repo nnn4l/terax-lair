@@ -3,11 +3,16 @@ mod modules;
 
 use lair::checklist::ChecklistWatcher;
 use lair::orchestrator::{
-    lair_append_checklist_item, lair_delete_checklist_item, lair_import_spec, lair_list_models,
-    lair_list_specs, lair_paste_spec, lair_queue_check_stale, lair_queue_get, lair_queue_pause,
-    lair_queue_pin, lair_queue_resync, lair_queue_resume, lair_queue_set_autopilot,
-    lair_queue_skip, lair_queue_unpin, lair_read_checklist, lair_send_message,
+    lair_append_checklist_item, lair_delete_checklist_item, lair_dispatch_critiques,
+    lair_import_spec, lair_list_models, lair_list_specs, lair_paste_spec,
+    lair_queue_check_stale, lair_queue_drop, lair_queue_edit_context, lair_queue_get,
+    lair_queue_mark_done, lair_queue_pause, lair_queue_pin, lair_queue_resync,
+    lair_queue_resume, lair_queue_set_autopilot, lair_queue_skip, lair_queue_unpin,
+    lair_read_checklist, lair_read_pillars, lair_run_pillar_check, lair_send_message,
     lair_toggle_checklist_item, lair_watch_checklist, LairConfig, LairState,
+};
+use lair::hub_tabs::{
+    lair_close_hub_tab, lair_list_hub_tabs, lair_open_repo_tab, lair_switch_hub_tab, HubTabsState,
 };
 use lair::worktree::lair_list_worktrees;
 use modules::{agent, fs, git, net, pty, secrets, shell, workspace};
@@ -116,6 +121,7 @@ pub fn run() {
         .plugin(tauri_plugin_store::Builder::new().build())
         .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_dialog::init())
         .plugin(
             tauri_plugin_log::Builder::new()
                 .level(tauri_plugin_log::log::LevelFilter::Info)
@@ -125,6 +131,12 @@ pub fn run() {
         .manage(lair_config)
         .manage(LairState::new())
         .manage(ChecklistWatcher::default())
+        .setup(|app| {
+            let dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
+            let initial = crate::lair::hub_tabs::load(&dir);
+            app.manage(HubTabsState(Mutex::new(initial)));
+            Ok(())
+        })
         .manage(pty::PtyState::default())
         .manage(shell::ShellState::default())
         .manage(secrets::SecretsState::default())
@@ -211,9 +223,16 @@ pub fn run() {
             lair_queue_pin,
             lair_queue_unpin,
             lair_queue_get,
+            lair_queue_drop,
+            lair_queue_mark_done,
+            lair_queue_edit_context,
             lair_queue_set_autopilot,
             lair_queue_check_stale,
             lair_queue_resync,
+            lair_list_hub_tabs,
+            lair_open_repo_tab,
+            lair_close_hub_tab,
+            lair_switch_hub_tab,
             lair_list_worktrees,
             lair_read_checklist,
             lair_append_checklist_item,
@@ -221,6 +240,9 @@ pub fn run() {
             lair_delete_checklist_item,
             lair_watch_checklist,
             lair_list_models,
+            lair_read_pillars,
+            lair_run_pillar_check,
+            lair_dispatch_critiques,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

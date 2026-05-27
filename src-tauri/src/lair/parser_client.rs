@@ -175,8 +175,8 @@ pub async fn route_agent(req: RouteRequest) -> Result<RouteResult, String> {
     let system = "You route prompts to coding agents. Reply with bare JSON ONLY \
 (no markdown, no code fences, no prose before or after): \
 {\"agent\": \"claude\" or \"codex\", \"reason\": \"short why\"}. \
-Heuristic: Claude for planning/thinking/ambiguity; Codex for concrete edits. \
-Phase weights: plan/review -> Claude; implement/refactor/test -> Codex.";
+Heuristic: Claude for planning/thinking/ambiguity; Codex for concrete edits and critique sweeps. \
+Phase weights: review -> Claude; implement/refactor/test/critique -> Codex.";
     let user = format!("Phase: {}\nPrompt: {}", req.phase, req.prompt);
     let body = ChatRequest {
         model: req.model,

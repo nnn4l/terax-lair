@@ -1,6 +1,7 @@
 pub mod checklist;
 pub mod cli_agent;
 pub mod doc_watcher;
+pub mod hub_tabs;
 pub mod keychain;
 pub mod narrator;
 pub mod orchestrator;
