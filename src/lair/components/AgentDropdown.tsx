@@ -1,3 +1,10 @@
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useLair } from "@/lair/state";
 import type { AgentChoice } from "@/lair/types";
 
@@ -13,17 +20,20 @@ export function AgentDropdown() {
   const setChoice = useLair((state) => state.setAgentChoice);
 
   return (
-    <select
-      value={choice}
-      onChange={(event) => setChoice(event.target.value as AgentChoice)}
-      className="h-6 rounded-md border-0 bg-muted/60 px-1.5 text-[11px] font-medium text-foreground/90 outline-none hover:bg-muted focus:bg-muted"
-      title="agent"
-    >
-      {CHOICES.map((item) => (
-        <option key={item.value} value={item.value}>
-          {item.label}
-        </option>
-      ))}
-    </select>
+    <Select value={choice} onValueChange={(v) => setChoice(v as AgentChoice)}>
+      <SelectTrigger
+        size="sm"
+        className="h-5 w-auto gap-1 rounded-md border-0 bg-background/70 px-1.5 py-0 text-[10.5px] font-medium text-foreground/90 shadow-none hover:bg-muted focus:bg-muted [&>svg]:size-3"
+      >
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent className="min-w-28 rounded-md">
+        {CHOICES.map((item) => (
+          <SelectItem key={item.value} value={item.value} className="rounded-sm py-1 pr-6 pl-2 text-[11px]">
+            {item.label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
   );
 }

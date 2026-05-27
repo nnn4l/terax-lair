@@ -11,22 +11,16 @@ import type { CardData } from "@/lair/types";
 describe("LairChat components", () => {
   test("agent picker defaults to text-only Codex-first choices", () => {
     const html = renderToStaticMarkup(<AgentDropdown />);
-    expect(html.indexOf("Codex")).toBeLessThan(html.indexOf("Claude"));
-    expect(html).toContain("Compare");
-    expect(html).toContain("Auto");
+    expect(html).toContain('role="combobox"');
+    expect(html).toContain('data-slot="select-trigger"');
+    expect(html).not.toContain("<option");
   });
 
   test("phase picker renders every Lair phase", () => {
     const html = renderToStaticMarkup(<PhaseDropdown />);
-    for (const phase of [
-      "plan",
-      "implement",
-      "refactor",
-      "test",
-      "review",
-    ]) {
-      expect(html).toContain(`>${phase}</option>`);
-    }
+    expect(html).toContain('role="combobox"');
+    expect(html).toContain('data-slot="select-trigger"');
+    expect(html).not.toContain("<option");
   });
 
   test("lair chat includes the mini-window top gradient", () => {

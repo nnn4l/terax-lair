@@ -1,4 +1,11 @@
 import { useEffect, useMemo } from "react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { listModels } from "@/lair/api";
 import { useLair } from "@/lair/state";
 import type { Agent, ModelInfo } from "@/lair/types";
@@ -24,6 +31,9 @@ const ID_FILTER: Record<"anthropic" | "openai", RegExp> = {
   anthropic: /^claude-(opus|sonnet|haiku)-\d+-\d+$/,
   openai: /^(gpt-\d+(-mini|-turbo|-nano)?|o\d+(-mini|-pro)?)$/,
 };
+
+// Models that do NOT support an effort dial.
+const EFFORT_UNSUPPORTED = new Set<string>(["claude-haiku-4-5"]);
 
 const EFFORTS = [
   { value: "low", label: "low" },
@@ -79,49 +89,83 @@ export function ModelDropdown({ agent }: { agent: Agent }) {
     }
   }, [isCodex, model, setCodexModel]);
 
+  const effortDisabled = !isCodex && (!model || EFFORT_UNSUPPORTED.has(model));
+
   return (
-    <div className="flex items-center gap-1">
+    <div className="flex h-6 items-center gap-1 rounded-md border border-border/50 bg-background/65 px-1">
       {!isCodex ? (
-        <select
-          value={model ?? ""}
-          onChange={(e) => {
-            const next = e.target.value || null;
+        <Select
+          value={model ?? "__none__"}
+          onValueChange={(v) => {
+            const next = v === "__none__" ? null : v;
             setModel(next);
             if (!next) setEffort(null);
           }}
-          className="h-5 min-w-0 max-w-[8rem] rounded-md border-0 bg-muted/60 px-1.5 text-[10px] font-medium text-muted-foreground outline-none hover:bg-muted focus:bg-muted"
-          title={`${agent} model`}
         >
-          <option value="">model</option>
-          {models.map((m) => (
-            <option key={m.id} value={m.id} title={m.name}>
-              {shortLabel(m.id)}
-            </option>
-          ))}
-        </select>
+          <SelectTrigger
+            size="sm"
+            className="h-5 max-w-[10rem] min-w-[6.75rem] gap-1 rounded-sm border-0 bg-transparent px-1 py-0 text-[10.5px] font-medium text-foreground/85 shadow-none hover:bg-muted/70 [&>svg]:size-3"
+            title={`${agent} model`}
+          >
+            <SelectValue placeholder="model" />
+          </SelectTrigger>
+          <SelectContent className="min-w-52 rounded-md">
+            <SelectItem value="__none__" className="rounded-sm py-1.5 pr-6 pl-2 text-[11px]">
+              <span className="flex flex-col items-start gap-0">
+                <span>CLI default</span>
+                <span className="text-[10px] font-normal text-muted-foreground">Use configured agent default</span>
+              </span>
+            </SelectItem>
+            {models.map((m) => (
+              <SelectItem
+                key={m.id}
+                value={m.id}
+                className="rounded-sm py-1.5 pr-6 pl-2 text-[11px]"
+                title={m.name}
+              >
+                <span className="flex flex-col items-start gap-0">
+                  <span>{shortLabel(m.id)}</span>
+                  <span className="text-[10px] font-normal text-muted-foreground">{m.name}</span>
+                </span>
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       ) : null}
-      {model || isCodex ? (
-        <select
-          value={effort ?? ""}
-          onChange={(e) => setEffort(e.target.value || null)}
-          className="h-5 rounded-md border-0 bg-muted/60 px-1.5 text-[10px] font-medium text-muted-foreground outline-none hover:bg-muted focus:bg-muted"
-          title={`${agent} effort`}
+      <Select
+        value={effort ?? "__none__"}
+        onValueChange={(v) => setEffort(v === "__none__" ? null : v)}
+        disabled={effortDisabled}
+      >
+        <SelectTrigger
+          size="sm"
+          className="h-5 min-w-[4.25rem] gap-1 rounded-sm border-0 bg-transparent px-1 py-0 text-[10.5px] font-medium text-foreground/85 shadow-none hover:bg-muted/70 disabled:opacity-40 [&>svg]:size-3"
+          title={
+            effortDisabled
+              ? !model
+                ? "pick a model first"
+                : "selected model has no effort dial"
+              : `${agent} effort`
+          }
         >
-          <option value="">effort</option>
+          <SelectValue placeholder="effort" />
+        </SelectTrigger>
+        <SelectContent className="min-w-24 rounded-md">
+          <SelectItem value="__none__" className="rounded-sm py-1 pr-6 pl-2 text-[11px]">
+            default
+          </SelectItem>
           {EFFORTS.map((e) => (
-            <option key={e.value} value={e.value}>
+            <SelectItem key={e.value} value={e.value} className="rounded-sm py-1 pr-6 pl-2 text-[11px]">
               {e.label}
-            </option>
+            </SelectItem>
           ))}
-        </select>
-      ) : null}
+        </SelectContent>
+      </Select>
     </div>
   );
 }
 
 function shortLabel(id: string): string {
   // claude-opus-4-5 -> opus-4.5; o4-mini -> o4-mini; gpt-5 -> gpt-5
-  return id
-    .replace(/^claude-/, "")
-    .replace(/(\d)-(\d)/g, "$1.$2");
+  return id.replace(/^claude-/, "").replace(/(\d)-(\d)/g, "$1.$2");
 }

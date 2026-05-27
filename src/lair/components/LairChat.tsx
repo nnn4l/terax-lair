@@ -16,10 +16,17 @@ import { Card } from "@/lair/components/Card";
 import { ModelDropdown } from "@/lair/components/ModelDropdown";
 import { NarrationLine } from "@/lair/components/NarrationLine";
 import { PhaseDropdown } from "@/lair/components/PhaseDropdown";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { ApprovalGateCard } from "@/lair/components/ApprovalGateCard";
 import { StaleSpecCard } from "@/lair/components/StaleSpecCard";
 import {
   Add01Icon,
-  ArrowDown01Icon,
   Cancel01Icon,
   CopyIcon,
   PencilEdit02Icon,
@@ -62,6 +69,7 @@ export function LairChat({ onClose }: { onClose?: () => void }) {
   const cursor = useLair((s) => s.cursor);
   const staleReports = useLair((s) => s.staleReports);
   const staleSpecFile = useLair((s) => s.staleSpecFile);
+  const pendingGate = useLair((s) => s.pendingGate);
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<{ message: string; prompt: string } | null>(null);
@@ -110,10 +118,18 @@ export function LairChat({ onClose }: { onClose?: () => void }) {
         void queueGet().then((items) => {
           if (items) setQueue(items);
         });
-      } else if (event.type === "paused" || event.type === "blocked_awaiting_approval") {
+      } else if (event.type === "blocked_awaiting_approval") {
+        setAutopilotPaused(true);
+        useLair.getState().setPendingGate({
+          item_id: event.id,
+          reason: event.reason,
+          raised_at: Date.now(),
+        });
+      } else if (event.type === "paused") {
         setAutopilotPaused(true);
       } else if (event.type === "resumed") {
         setAutopilotPaused(false);
+        useLair.getState().setPendingGate(null);
       }
     });
     const specChanges = onSpecChanged((file) => {
@@ -331,6 +347,7 @@ export function LairChat({ onClose }: { onClose?: () => void }) {
             {staleReports.length > 0 && staleSpecFile ? (
               <StaleSpecCard reports={staleReports} specFile={staleSpecFile} />
             ) : null}
+            {pendingGate ? <ApprovalGateCard gate={pendingGate} /> : null}
             <div className="min-h-0 flex-1">
               <EmptyState onPick={setText} />
             </div>
@@ -346,6 +363,7 @@ export function LairChat({ onClose }: { onClose?: () => void }) {
             {staleReports.length > 0 && staleSpecFile ? (
               <StaleSpecCard reports={staleReports} specFile={staleSpecFile} />
             ) : null}
+            {pendingGate ? <ApprovalGateCard gate={pendingGate} /> : null}
             {turns.map((turn) => (
               <TurnView
                 key={turn.id}
@@ -438,27 +456,25 @@ function SessionPicker({
   const sorted = [...sessions].sort((a, b) => b.updatedAt - a.updatedAt);
   return (
     <div className="flex min-w-0 items-center gap-1">
-      <div className="relative min-w-0">
-        <select
-          value={activeSessionId ?? ""}
-          onChange={(event) => onSwitch(event.target.value)}
-          className="h-6 max-w-[11rem] appearance-none rounded-md bg-transparent py-0 pl-1.5 pr-5 text-[11px] text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-foreground"
+      <Select
+        value={activeSessionId ?? ""}
+        onValueChange={(value) => onSwitch(value)}
+      >
+        <SelectTrigger
+          size="sm"
+          className="h-5 w-auto max-w-[11rem] gap-1 rounded-md border-0 bg-transparent px-1.5 py-0 text-[10.5px] text-muted-foreground hover:bg-accent hover:text-foreground [&>svg]:size-3"
           title="Switch Lair chat"
         >
-          {activeSessionId ? null : <option value="">{activeTitle}</option>}
+          <SelectValue placeholder={activeTitle} />
+        </SelectTrigger>
+        <SelectContent className="rounded-md">
           {sorted.map((session) => (
-            <option key={session.id} value={session.id}>
+            <SelectItem key={session.id} value={session.id} className="rounded-sm py-1 pr-6 pl-2 text-[11px]">
               {session.title || "New chat"}
-            </option>
+            </SelectItem>
           ))}
-        </select>
-        <HugeiconsIcon
-          icon={ArrowDown01Icon}
-          size={10}
-          strokeWidth={2}
-          className="pointer-events-none absolute right-1.5 top-2 text-muted-foreground/70"
-        />
-      </div>
+        </SelectContent>
+      </Select>
       <button
         type="button"
         onClick={onNew}
@@ -484,26 +500,45 @@ function SessionPicker({
 }
 
 function EmptyState({ onPick }: { onPick: (text: string) => void }) {
-  const suggestions = [
-    "Plan this feature.",
-    "Compare Claude and Codex on this task.",
-  ];
+  const workspace = useLair((s) => s.workspace);
+  const queue = useLair((s) => s.queue);
+  const cursor = useLair((s) => s.cursor);
+  const workspaceLabel = workspace ? workspace.split(/[\\/]/).pop() || workspace : "no workspace";
+  const currentItem = cursor.itemId ? findQueueItem(queue, cursor.itemId) : null;
+
+  const suggestions: { label: string; prompt: string }[] = currentItem
+    ? [
+        { label: "Execute current task", prompt: "Execute this task." },
+        { label: "Review the spec first", prompt: "Review the spec context before any edits." },
+        { label: "Ask for a plan", prompt: "Outline how you'd approach this task before doing it." },
+      ]
+    : [
+        { label: "Plan this feature", prompt: "Plan this feature." },
+        { label: "Compare Claude and Codex", prompt: "Compare Claude and Codex on this task." },
+        { label: "Inspect repo", prompt: "Inspect this repo and tell me what it does in 5 lines." },
+      ];
+
   return (
-    <div className="flex h-full flex-col items-center justify-center gap-5 px-8 py-10 text-center">
-      <img src="/logo.png" alt="Terax" className="size-12 opacity-90" />
+    <div className="flex h-full flex-col items-center justify-center gap-4 px-8 py-10 text-center">
+      <img src="/logo.png" alt="Lair" className="size-14 opacity-90" />
       <div className="space-y-1">
-        <p className="text-[13px] font-semibold tracking-tight">Start Lair chat</p>
-        <p className="text-[11px] text-muted-foreground">Ready when you are.</p>
+        <p className="text-[14px] font-semibold tracking-tight">Lair / {workspaceLabel}</p>
+        <p className="text-[11px] text-muted-foreground">
+          {currentItem ? `Current: ${currentItem.label}` : "Pick a starter or type a message."}
+        </p>
       </div>
       <div className="flex w-full flex-col gap-2">
-        {suggestions.map((text) => (
+        {suggestions.map((s) => (
           <button
-            key={text}
+            key={s.label}
             type="button"
-            onClick={() => onPick(text)}
-            className="rounded-lg border border-border bg-card/70 px-2.5 py-2 text-left text-[11.5px] font-medium text-foreground transition-colors hover:bg-muted/50"
+            onClick={() => onPick(s.prompt)}
+            className="rounded-lg border border-border bg-card/70 px-3 py-2 text-left text-[12px] font-medium text-foreground transition-colors hover:bg-muted/50"
           >
-            {text}
+            <span className="block">{s.label}</span>
+            <span className="mt-0.5 block text-[11px] font-normal text-muted-foreground">
+              {s.prompt}
+            </span>
           </button>
         ))}
       </div>
