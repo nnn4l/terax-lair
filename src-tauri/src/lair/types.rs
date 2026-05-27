@@ -142,6 +142,12 @@ pub struct StaleReport {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PillarFinding {
+    pub pillar: String,
+    pub violation: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct QueueContext {
     pub item_id: String,
     pub label: String,

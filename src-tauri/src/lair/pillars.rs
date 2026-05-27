@@ -34,6 +34,7 @@ pub fn watch_pillars<F>(workspace: &str, on_change: F) -> Result<WatcherHandle, 
 where
     F: Fn() + Send + 'static,
 {
+    ensure_pillars_file(workspace)?;
     let path = pillars_path(workspace);
     let dir = path.parent().ok_or("no parent dir")?.to_path_buf();
     let target = path.clone();
