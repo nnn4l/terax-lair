@@ -149,9 +149,14 @@ impl BackendManager {
         };
         if let Some(cfg) = cfg {
             self.stop(id)?;
-            self.start(cfg)?;
+            self.start(cfg)
+        } else {
+            // Never started — cold-start it
+            match id {
+                "uniclaude-proxy" => spawn_uniclaude_proxy(),
+                other => Err(format!("unknown backend: {other}")),
+            }
         }
-        Ok(())
     }
 
     pub fn stop_all(&self) {
