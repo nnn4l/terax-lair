@@ -174,7 +174,7 @@ export function LanePicker() {
                         : lane.backend
                           ? "CLI default"
                           : lane.default_model
-                            ? `${lane.default_model.replace(/^claude-/, "").replace(/(\d)-(\d)/g, "$1.$2")}. ${COST_LABEL[lane.cost_tier] ?? lane.cost_tier}`
+                            ? lane.default_model.replace(/^claude-/, "").replace(/(\d)-(\d)/g, "$1.$2")
                             : COST_LABEL[lane.cost_tier] ?? lane.cost_tier
                   }
                 />
