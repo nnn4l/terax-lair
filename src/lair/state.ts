@@ -18,12 +18,21 @@ import type {
   LairSession,
 } from "@/lair/types";
 
+interface ChatTab {
+  id: string;
+  sessionId: string;
+  pinned: boolean;
+  lastSeenCardId: string | null;
+}
+
 interface LairState {
   cards: CardData[];
   narrations: NarrationLine[];
   turns: Turn[];
   sessions: LairSession[];
   activeSessionId: string | null;
+  chatTabs: ChatTab[];
+  activeTabId: string | null;
   currentTurnId: string | null;
   phase: Phase;
   agentChoice: AgentChoice;
@@ -84,6 +93,10 @@ interface LairState {
   setLaneStatus: (status: LaneStatus) => void;
   setBackendStatus: (id: string, status: BackendStatus) => void;
   setActiveLaneId: (id: string) => void;
+  addChatTab: (sessionId: string) => string;
+  closeChatTab: (tabId: string) => void;
+  switchChatTab: (tabId: string) => void;
+  markTabSeen: (tabId: string) => void;
   newSession: (title?: string) => string;
   switchSession: (id: string) => void;
   deleteSession: (id: string) => void;
@@ -112,6 +125,20 @@ function updateSession(
 function titleFromPrompt(prompt: string): string {
   const oneLine = prompt.replace(/\s+/g, " ").trim();
   return oneLine.length > 34 ? `${oneLine.slice(0, 34)}...` : oneLine;
+}
+
+function createTabId(): string {
+  return `tab-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function latestCardId(cards: CardData[]): string | null {
+  return cards.length > 0 ? cards[cards.length - 1].id : null;
+}
+
+function upsertCardList(cards: CardData[], card: CardData): CardData[] {
+  const idx = cards.findIndex((c) => c.id === card.id);
+  if (idx === -1) return [...cards, card];
+  return cards.map((item, index) => (index === idx ? card : item));
 }
 
 function migratePhase(value: unknown): Phase {
@@ -158,6 +185,8 @@ export const useLair = create<LairState>()(
       turns: [],
       sessions: [],
       activeSessionId: null,
+      chatTabs: [],
+      activeTabId: null,
       currentTurnId: null,
       phase: "implement",
       agentChoice: "codex",
@@ -185,9 +214,38 @@ export const useLair = create<LairState>()(
 
       upsertCard: (card, turnId) =>
         set((state) => {
-          const idx = state.cards.findIndex((c) => c.id === card.id);
-          const cards = idx === -1 ? [...state.cards, card] : [...state.cards];
-          if (idx !== -1) cards[idx] = card;
+          const now = Date.now();
+          const sessions = state.sessions.map((session) => {
+            const ownsTurn = turnId
+              ? session.turnIds.includes(turnId) || session.turns.some((t) => t.id === turnId)
+              : session.cards.some((c) => c.id === card.id);
+            if (!ownsTurn) return session;
+
+            const cards = upsertCardList(session.cards, card);
+            const turns = turnId
+              ? session.turns.map((t) =>
+                  t.id === turnId && !t.cardIds.includes(card.id)
+                    ? { ...t, cardIds: [...t.cardIds, card.id] }
+                    : t,
+                )
+              : session.turns;
+            return {
+              ...session,
+              cards,
+              turns,
+              turnIds: turns.map((t) => t.id),
+              updatedAt: now,
+            };
+          });
+          const activeSession = sessions.find((s) => s.id === state.activeSessionId);
+          if (activeSession) {
+            return {
+              sessions,
+              cards: activeSession.cards,
+              turns: activeSession.turns,
+            };
+          }
+          const cards = upsertCardList(state.cards, card);
           const turns = turnId
             ? state.turns.map((t) =>
                 t.id === turnId && !t.cardIds.includes(card.id)
@@ -195,35 +253,32 @@ export const useLair = create<LairState>()(
                   : t,
               )
             : state.turns;
-          const sessions = updateSession(
-            { ...state, cards, turns },
-            state.activeSessionId,
-            (session) => ({
-              ...session,
-              cards,
-              turns,
-              turnIds: turns.map((t) => t.id),
-              updatedAt: Date.now(),
-            }),
-          );
-          return { cards, turns, sessions };
+          return { sessions, cards, turns };
         }),
 
       appendChunk: (id, chunk) =>
         set((state) => {
+          const now = Date.now();
+          const sessions = state.sessions.map((session) => {
+            const idx = session.cards.findIndex((c) => c.id === id);
+            if (idx === -1) return session;
+            const cards = [...session.cards];
+            cards[idx] = {
+              ...cards[idx],
+              raw_output: cards[idx].raw_output + chunk,
+            };
+            return { ...session, cards, updatedAt: now };
+          });
+          const activeSession = sessions.find((s) => s.id === state.activeSessionId);
+          if (activeSession) return { sessions, cards: activeSession.cards };
           const idx = state.cards.findIndex((c) => c.id === id);
-          if (idx === -1) return state;
+          if (idx === -1) return { sessions };
           const cards = [...state.cards];
           cards[idx] = {
             ...cards[idx],
             raw_output: cards[idx].raw_output + chunk,
           };
-          const sessions = updateSession(
-            { ...state, cards },
-            state.activeSessionId,
-            (session) => ({ ...session, cards, updatedAt: Date.now() }),
-          );
-          return { cards, sessions };
+          return { sessions, cards };
         }),
 
       clearCards: () =>
@@ -336,6 +391,34 @@ export const useLair = create<LairState>()(
           backendStatuses: { ...s.backendStatuses, [id]: status },
         })),
       setActiveLaneId: (activeLaneId) => set({ activeLaneId }),
+      addChatTab: (sessionId) => {
+        const id = createTabId();
+        set((state) => ({
+          chatTabs: [...state.chatTabs, { id, sessionId, pinned: false, lastSeenCardId: null }],
+          activeTabId: id,
+        }));
+        return id;
+      },
+      closeChatTab: (tabId) =>
+        set((state) => {
+          const next = state.chatTabs.filter((tab) => tab.id !== tabId);
+          const activeTabId =
+            state.activeTabId === tabId ? (next.length > 0 ? next[next.length - 1].id : null) : state.activeTabId;
+          return { chatTabs: next, activeTabId };
+        }),
+      switchChatTab: (activeTabId) => set({ activeTabId }),
+      markTabSeen: (tabId) =>
+        set((state) => {
+          const tab = state.chatTabs.find((item) => item.id === tabId);
+          if (!tab) return state;
+          const session = state.sessions.find((item) => item.id === tab.sessionId);
+          const lastSeenCardId = latestCardId(session?.cards ?? state.cards);
+          return {
+            chatTabs: state.chatTabs.map((item) =>
+              item.id === tabId ? { ...item, lastSeenCardId } : item,
+            ),
+          };
+        }),
       newSession: (title) => {
         const now = Date.now();
         const id = createId("s");
@@ -469,9 +552,14 @@ export const useLair = create<LairState>()(
     }),
     {
       name: "lair-state",
-      version: 3,
+      version: 4,
       migrate: (persistedState: unknown, version: number) => {
         let obj = migratePersistedState(persistedState);
+        if (typeof obj === "object" && obj !== null && version < 4) {
+          const o = obj as Record<string, unknown>;
+          if (!Array.isArray((o as any).chatTabs)) (o as any).chatTabs = [];
+          if (!(o as any).activeTabId) (o as any).activeTabId = null;
+        }
         if (typeof obj === "object" && obj !== null && version < 3) {
           const o = obj as Record<string, unknown>;
           if (typeof o.agentChoice === "string") {
@@ -502,6 +590,8 @@ export const useLair = create<LairState>()(
         workspace: state.workspace,
         sessions: state.sessions,
         activeSessionId: state.activeSessionId,
+        chatTabs: state.chatTabs,
+        activeTabId: state.activeTabId,
         claudeModel: state.claudeModel,
         codexModel: state.codexModel,
         claudeEffort: state.claudeEffort,

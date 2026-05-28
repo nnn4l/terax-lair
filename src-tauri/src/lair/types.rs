@@ -212,19 +212,21 @@ pub struct HubState {
 
 pub type LaneId = String;
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum LaneRole {
+    #[default]
     Implementor,
     Reviewer,
     Consultant,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum CostTier {
     Free,
     Cheap,
+    #[default]
     Standard,
     Expensive,
 }
@@ -252,18 +254,6 @@ pub struct Lane {
 
 fn default_true() -> bool {
     true
-}
-
-impl Default for LaneRole {
-    fn default() -> Self {
-        LaneRole::Implementor
-    }
-}
-
-impl Default for CostTier {
-    fn default() -> Self {
-        CostTier::Standard
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]

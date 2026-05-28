@@ -1,33 +1,24 @@
-import type { ReactNode } from "react";
-import { OrchestratorChatCard } from "@/lair/components/OrchestratorChatCard";
-import { TodayBriefing } from "@/lair/components/TodayBriefing";
-import { TodaysPlanCard } from "@/lair/components/TodaysPlanCard";
-import { WorkspaceLauncher } from "@/lair/components/WorkspaceLauncher";
-
-function Card({ children }: { children: ReactNode }) {
-  return (
-    <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-border/60 bg-card">
-      {children}
-    </div>
-  );
-}
+import { useState } from "react";
+import { AmbientStrip } from "@/lair/components/AmbientStrip";
+import { DashboardOrchestratorColumn } from "@/lair/components/DashboardOrchestratorColumn";
+import { OpenWorkspaceDialog } from "@/lair/components/OpenWorkspaceDialog";
+import { TodayBriefingRow } from "@/lair/components/TodayBriefingRow";
+import { WorkspacesColumn } from "@/lair/components/WorkspacesColumn";
 
 export function DashboardView() {
+  const [openDialog, setOpenDialog] = useState(false);
+
   return (
-    <div className="grid h-full grid-cols-[minmax(200px,240px)_minmax(420px,1fr)_minmax(240px,280px)] gap-3 overflow-hidden bg-background/40 p-3">
-      <Card>
-        <WorkspaceLauncher />
-      </Card>
-      <Card>
-        <OrchestratorChatCard />
-      </Card>
-      <Card>
-        <TodayBriefing />
-        <div className="border-t border-border/60" />
-        <div className="min-h-0 flex-1">
-          <TodaysPlanCard />
-        </div>
-      </Card>
+    <div className="flex h-full flex-col overflow-hidden bg-background">
+      <TodayBriefingRow />
+      <div className="grid flex-1 grid-cols-[minmax(220px,38%)_minmax(360px,1fr)] overflow-hidden">
+        <WorkspacesColumn onOpenDialog={() => setOpenDialog(true)} />
+        <DashboardOrchestratorColumn />
+      </div>
+      <AmbientStrip />
+      {openDialog ? (
+        <OpenWorkspaceDialog open={openDialog} onOpenChange={setOpenDialog} />
+      ) : null}
     </div>
   );
 }

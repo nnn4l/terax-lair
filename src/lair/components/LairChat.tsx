@@ -7,35 +7,30 @@ import {
   onQueueEvent,
   onSpecComplete,
   onSpecChanged,
+  onLaneStatusChanged,
   queueCheckStale,
   queueGet,
   queueUnpin,
   stopCard,
 } from "@/lair/api";
 import { useLair } from "@/lair/state";
+import { ChatTabStrip } from "@/lair/components/ChatTabStrip";
+import { ContextMeterChip } from "@/lair/components/ContextMeterChip";
+import { LaneExpandedView } from "@/lair/components/LaneExpandedView";
 import { LanePicker } from "@/lair/components/LanePicker";
 import { PhaseDropdown } from "@/lair/components/PhaseDropdown";
+import { SessionsHome } from "@/lair/components/SessionsHome";
 import { Card } from "@/lair/components/Card";
 import { CritiqueTray } from "@/lair/components/CritiqueTray";
 import { NarrationLine } from "@/lair/components/NarrationLine";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { ApprovalGateCard } from "@/lair/components/ApprovalGateCard";
 import { PillarCheckCard } from "@/lair/components/PillarCheckCard";
 import { StaleSpecCard } from "@/lair/components/StaleSpecCard";
 import {
-  Add01Icon,
-  ArrowDown01Icon,
   Cancel01Icon,
   CopyIcon,
   PencilEdit02Icon,
   Refresh01Icon,
-  Tick02Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import type {
@@ -49,7 +44,6 @@ export function LairChat({ onClose }: { onClose?: () => void }) {
   const cards = useLair((state) => state.cards);
   const narrations = useLair((state) => state.narrations);
   const turns = useLair((state) => state.turns);
-  const sessions = useLair((state) => state.sessions);
   const activeSessionId = useLair((state) => state.activeSessionId);
   const upsertCard = useLair((state) => state.upsertCard);
   const appendChunk = useLair((state) => state.appendChunk);
@@ -59,8 +53,6 @@ export function LairChat({ onClose }: { onClose?: () => void }) {
   const setAutopilotPaused = useLair((state) => state.setAutopilotPaused);
   const setStaleReports = useLair((state) => state.setStaleReports);
   const newSession = useLair((state) => state.newSession);
-  const switchSession = useLair((state) => state.switchSession);
-  const deleteSession = useLair((state) => state.deleteSession);
   const startTurn = useLair((state) => state.startTurn);
   const attachCardIds = useLair((state) => state.attachCardIds);
   const workspace = useLair((state) => state.workspace);
@@ -78,6 +70,8 @@ export function LairChat({ onClose }: { onClose?: () => void }) {
   const pillarCheckPending = useLair((s) => s.pillarCheckPending);
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
+  const [homeOpen, setHomeOpen] = useState(false);
+  const [laneExpandedOpen, setLaneExpandedOpen] = useState(false);
   const [error, setError] = useState<{ message: string; prompt: string } | null>(null);
   const threadRef = useRef<HTMLDivElement | null>(null);
   const composerRef = useRef<HTMLTextAreaElement | null>(null);
@@ -97,10 +91,14 @@ export function LairChat({ onClose }: { onClose?: () => void }) {
       appendChunk(event.card_id, event.chunk),
     );
     const narrationSub = onNarration((event) => addNarration(event.line));
+    const laneStatusSub = onLaneStatusChanged((status) => {
+      useLair.getState().setLaneStatus(status);
+    });
     return () => {
       void cardUpdate.then((unlisten) => unlisten());
       void streamChunk.then((unlisten) => unlisten());
       void narrationSub.then((unlisten) => unlisten());
+      void laneStatusSub.then((unlisten) => unlisten());
     };
   }, [appendChunk, upsertCard, addNarration]);
 
@@ -112,6 +110,10 @@ export function LairChat({ onClose }: { onClose?: () => void }) {
           (c) => c.status === "streaming" || c.status === "summarizing",
         );
         if (inflight) void stopCard(inflight.id);
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setHomeOpen(true);
       }
     }
     window.addEventListener("keydown", onKey);
@@ -190,7 +192,6 @@ export function LairChat({ onClose }: { onClose?: () => void }) {
   );
 
   const isEmpty = turns.length === 0;
-  const activeSession = sessions.find((s) => s.id === activeSessionId) ?? null;
   const activityKey = useMemo(
     () =>
       [
@@ -314,21 +315,20 @@ export function LairChat({ onClose }: { onClose?: () => void }) {
         aria-hidden
         className="pointer-events-none absolute inset-x-0 top-0 h-40 bg-[radial-gradient(circle_at_50%_-18%,var(--accent),transparent_46%)] opacity-70"
       />
+      <ChatTabStrip onHome={() => setHomeOpen(true)} />
+
       <div className="relative flex h-12 shrink-0 items-center justify-between gap-2 px-3">
         <div className="flex min-w-0 items-center gap-2.5">
-          <SessionPicker
-            sessions={sessions}
-            activeSessionId={activeSessionId}
-            activeTitle={activeSession?.title ?? "New chat"}
-            onNew={() => newSession()}
-            onSwitch={switchSession}
-            onDelete={deleteSession}
-          />
-        </div>
-        <div className="flex shrink-0 items-center gap-1.5">
           <span className="rounded-md border border-border/60 bg-background/70 px-1.5 py-0.5 text-[10.5px] text-muted-foreground tabular-nums">
             {sending ? "working" : `${turns.length} turns`}
           </span>
+        </div>
+        <div className="flex shrink-0 items-center gap-1.5">
+          <LaneExpandedView
+            open={laneExpandedOpen}
+            onOpenChange={setLaneExpandedOpen}
+            anchor={<ContextMeterChip onExpand={() => setLaneExpandedOpen(true)} />}
+          />
           {onClose ? (
             <button
               type="button"
@@ -460,107 +460,7 @@ export function LairChat({ onClose }: { onClose?: () => void }) {
         </div>
       </div>
       <CritiqueTray />
-    </div>
-  );
-}
-
-interface SessionPickerProps {
-  sessions: ReturnType<typeof useLair.getState>["sessions"];
-  activeSessionId: string | null;
-  activeTitle: string;
-  onNew: () => void;
-  onSwitch: (id: string) => void;
-  onDelete: (id: string) => void;
-}
-
-function SessionPicker({
-  sessions,
-  activeSessionId,
-  activeTitle,
-  onNew,
-  onSwitch,
-  onDelete,
-}: SessionPickerProps) {
-  const sorted = [...sessions].sort((a, b) => b.updatedAt - a.updatedAt);
-  return (
-    <div className="flex min-w-0 items-center gap-1">
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <button
-            type="button"
-            className="flex h-6 max-w-[11rem] items-center gap-1 rounded-full border border-border/60 bg-card px-1.5 text-[10.5px] text-muted-foreground transition-colors hover:border-border hover:bg-accent hover:text-foreground"
-            title="Switch Lair chat"
-          >
-            <span className="min-w-0 truncate">{activeTitle || "New chat"}</span>
-            <HugeiconsIcon icon={ArrowDown01Icon} size={10} strokeWidth={2} />
-          </button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" className="min-w-64 rounded-xl">
-          <div className="px-2 pt-1.5 pb-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-            Chats
-          </div>
-          {sorted.length === 0 ? (
-            <div className="px-2 py-2 text-[11px] text-muted-foreground">
-              No chats yet
-            </div>
-          ) : (
-            sorted.map((session) => (
-              <DropdownMenuItem
-                key={session.id}
-                onSelect={() => onSwitch(session.id)}
-                className={`flex items-start gap-2 pr-2 text-[12px] ${
-                  activeSessionId === session.id ? "bg-accent/40" : ""
-                }`}
-              >
-                <span className="flex min-w-0 flex-1 flex-col">
-                  <span className="truncate text-foreground/90">
-                    {session.title || "New chat"}
-                  </span>
-                  <span className="text-[10.5px] text-muted-foreground">
-                    Lair conversation
-                  </span>
-                </span>
-                {activeSessionId === session.id ? (
-                  <HugeiconsIcon
-                    icon={Tick02Icon}
-                    size={12}
-                    strokeWidth={2}
-                    className="mt-0.5 shrink-0 text-foreground"
-                  />
-                ) : null}
-              </DropdownMenuItem>
-            ))
-          )}
-          <DropdownMenuSeparator />
-          <DropdownMenuItem
-            onSelect={onNew}
-            className="flex items-center gap-2 text-[12px]"
-          >
-            <HugeiconsIcon icon={Add01Icon} size={13} strokeWidth={1.75} />
-            <span>New chat</span>
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
-      <button
-        type="button"
-        onClick={onNew}
-        className="flex size-6 items-center justify-center rounded-full border border-border/60 bg-card text-muted-foreground transition-colors hover:border-border hover:bg-accent hover:text-foreground"
-        title="New chat"
-        aria-label="New Lair chat"
-      >
-        <HugeiconsIcon icon={Add01Icon} size={12} strokeWidth={1.75} />
-      </button>
-      {activeSessionId ? (
-        <button
-          type="button"
-          onClick={() => onDelete(activeSessionId)}
-          className="flex size-6 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
-          title="Delete chat"
-          aria-label="Delete Lair chat"
-        >
-          <HugeiconsIcon icon={Cancel01Icon} size={11} strokeWidth={1.75} />
-        </button>
-      ) : null}
+      <SessionsHome open={homeOpen} onClose={() => setHomeOpen(false)} />
     </div>
   );
 }

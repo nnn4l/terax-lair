@@ -154,10 +154,8 @@ impl BackendManager {
             self.stop(id)?;
             self.start(cfg)
         } else {
-            // Never started — cold-start it
-            match id {
-                other => Err(format!("unknown backend: {other}")),
-            }
+            // Never started: cold-start needs a known backend id.
+            Err(format!("unknown backend: {id}"))
         }
     }
 

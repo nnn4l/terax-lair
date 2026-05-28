@@ -742,7 +742,10 @@ mod auth_tests {
         #[cfg(unix)]
         std::os::unix::fs::symlink(&outside, &link).expect("symlink");
         #[cfg(windows)]
-        std::os::windows::fs::symlink_dir(&outside, &link).expect("symlink");
+        if std::os::windows::fs::symlink_dir(&outside, &link).is_err() {
+            // Windows without Developer Mode/admin cannot create symlinks.
+            return;
+        }
         let reg = WorkspaceRegistry::default();
         reg.authorize(&allowed).expect("authorize root");
         let s = link.to_string_lossy().into_owned();

@@ -14,6 +14,7 @@ use lair::orchestrator::{
     lair_send_message, lair_stop_card,
     lair_toggle_checklist_item, lair_watch_checklist, LairConfig, LairState,
 };
+use lair::dashboard::{lair_dashboard_ambient, lair_dashboard_briefing};
 use lair::hub_tabs::{
     lair_close_hub_tab, lair_list_hub_tabs, lair_open_repo_tab, lair_switch_hub_tab, HubTabsState,
 };
@@ -295,6 +296,8 @@ pub fn run() {
             lair_stop_card,
             lair_restart_backend,
             lair_get_backend_status,
+            lair_dashboard_briefing,
+            lair_dashboard_ambient,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
