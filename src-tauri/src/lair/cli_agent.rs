@@ -214,7 +214,8 @@ fn build_codex(
 }
 
 /// On Windows, CreateProcess only finds `.exe` by default; npm-installed CLIs
-/// (codex, etc.) ship `.cmd` shims that won't resolve without an explicit
+/// (codex, etc.) ship `.cmd` shims and PowerShell tools can ship `.ps1`
+/// launchers that won't resolve without an explicit
 /// extension. Worse, `.cmd` shims pipe args through CMD.EXE which mangles
 /// multi-line strings. So when we find a `.cmd` shim, peek inside to recover
 /// the underlying node script and spawn node.exe directly.
@@ -226,15 +227,27 @@ fn resolve_program(name: &str) -> Resolved {
     let Ok(path) = std::env::var("PATH") else {
         return Resolved { program: name.to_string(), prefix_args: Vec::new() };
     };
-    // Prefer .exe (CreateProcess-friendly); fall back to .cmd (npm shim).
+    // Prefer .exe (CreateProcess-friendly); fall back to script shims.
     for dir in path.split(';').filter(|d| !d.is_empty()) {
-        for ext in &[".exe", ".cmd", ".bat"] {
+        for ext in &[".exe", ".cmd", ".bat", ".ps1"] {
             let candidate = Path::new(dir).join(format!("{name}{ext}"));
             if !candidate.is_file() { continue; }
             if *ext == ".cmd" || *ext == ".bat" {
                 if let Some(unwrapped) = unwrap_npm_shim(&candidate) {
                     return unwrapped;
                 }
+            }
+            if *ext == ".ps1" {
+                return Resolved {
+                    program: "powershell.exe".to_string(),
+                    prefix_args: vec![
+                        "-NoProfile".to_string(),
+                        "-ExecutionPolicy".to_string(),
+                        "Bypass".to_string(),
+                        "-File".to_string(),
+                        candidate.to_string_lossy().into_owned(),
+                    ],
+                };
             }
             return Resolved {
                 program: candidate.to_string_lossy().into_owned(),

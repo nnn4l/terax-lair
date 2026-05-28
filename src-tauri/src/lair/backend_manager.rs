@@ -163,8 +163,19 @@ impl BackendManager {
 
     pub fn check_pi(&self) -> Result<(), String> {
         self.emit("pi", BackendStatus::Starting);
-        let output = std::process::Command::new("pi")
-            .arg("--help")
+        #[cfg(windows)]
+        let mut command = {
+            let mut cmd = std::process::Command::new("powershell.exe");
+            cmd.args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", "pi --help"]);
+            cmd
+        };
+        #[cfg(not(windows))]
+        let mut command = {
+            let mut cmd = std::process::Command::new("pi");
+            cmd.arg("--help");
+            cmd
+        };
+        let output = command
             .stdout(Stdio::null())
             .stderr(Stdio::null())
             .status()
