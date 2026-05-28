@@ -1,3 +1,4 @@
+pub mod auto_router;
 pub mod checklist;
 pub mod cli_agent;
 pub mod doc_watcher;
