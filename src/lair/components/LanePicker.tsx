@@ -82,8 +82,8 @@ export function LanePicker() {
   const isAuto = active?.id === "auto";
   const ActiveIcon = isAuto ? Route01Icon : active ? ROLE_ICON[active.role] : CodeIcon;
 
-  // Resolve display model/effort. Skip model for backend lanes (DeepSeek) —
-  // they use Claude CLI internally with lane config, not the user's claude model override.
+  // Resolve display model/effort. Backend lanes use their own harness config,
+  // not the user's Claude/Codex model override.
   const isBackendLane = active?.backend != null;
   const userModel = active?.cli === "codex" ? codexModel : claudeModel;
   const userEffort = active?.cli === "codex" ? codexEffort : claudeEffort;

@@ -139,12 +139,12 @@ pub fn run() {
             crate::lair::backend_manager::BACKEND_MANAGER.set_app(app.handle().clone());
             tauri::async_runtime::spawn(async move {
                 let lanes = crate::lair::lanes::load().unwrap_or_default();
-                let needs_proxy = lanes
+                let needs_pi = lanes
                     .iter()
-                    .any(|l| l.enabled && l.backend.as_deref() == Some("uniclaude-proxy"));
-                if needs_proxy {
-                    if let Err(e) = crate::lair::backend_manager::spawn_uniclaude_proxy() {
-                        eprintln!("uniclaude-proxy spawn failed: {e}");
+                    .any(|l| l.enabled && l.backend.as_deref() == Some("pi"));
+                if needs_pi {
+                    if let Err(e) = crate::lair::backend_manager::check_pi() {
+                        eprintln!("pi harness check failed: {e}");
                     }
                 }
             });
@@ -158,17 +158,17 @@ pub fn run() {
                 let lanes = crate::lair::lanes::load().unwrap_or_default();
                 *state_for_watch.lanes_cache.lock().unwrap() = lanes.clone();
                 let _ = handle_clone.emit("lair-lanes-changed", &lanes);
-                let needs_proxy = lanes
+                let needs_pi = lanes
                     .iter()
-                    .any(|l| l.enabled && l.backend.as_deref() == Some("uniclaude-proxy"));
+                    .any(|l| l.enabled && l.backend.as_deref() == Some("pi"));
                 let running = matches!(
-                    crate::lair::backend_manager::BACKEND_MANAGER.status("uniclaude-proxy"),
+                    crate::lair::backend_manager::BACKEND_MANAGER.status("pi"),
                     crate::lair::types::BackendStatus::Running,
                 );
-                if needs_proxy && !running {
-                    let _ = crate::lair::backend_manager::spawn_uniclaude_proxy();
-                } else if !needs_proxy && running {
-                    let _ = crate::lair::backend_manager::BACKEND_MANAGER.stop("uniclaude-proxy");
+                if needs_pi && !running {
+                    let _ = crate::lair::backend_manager::check_pi();
+                } else if !needs_pi && running {
+                    let _ = crate::lair::backend_manager::BACKEND_MANAGER.stop("pi");
                 }
             });
             if let Ok(handle) = watcher {

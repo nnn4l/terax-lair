@@ -138,6 +138,9 @@ impl BackendManager {
     }
 
     pub fn restart(&self, id: &str) -> Result<(), String> {
+        if id == "pi" {
+            return self.check_pi();
+        }
         let cfg = {
             let guard = self.inner.lock().unwrap();
             guard.entries.get(id).map(|e| ManagedBackend {
@@ -153,9 +156,43 @@ impl BackendManager {
         } else {
             // Never started — cold-start it
             match id {
-                "uniclaude-proxy" => spawn_uniclaude_proxy(),
                 other => Err(format!("unknown backend: {other}")),
             }
+        }
+    }
+
+    pub fn check_pi(&self) -> Result<(), String> {
+        self.emit("pi", BackendStatus::Starting);
+        let output = std::process::Command::new("pi")
+            .arg("--help")
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status()
+            .map_err(|e| {
+                self.emit("pi", BackendStatus::Crashed);
+                format!("pi executable not available: {e}")
+            })?;
+        if output.success() {
+            self.inner.lock().unwrap().entries.insert(
+                "pi".into(),
+                BackendEntry {
+                    config: ManagedBackend {
+                        id: "pi".into(),
+                        program: PathBuf::from("pi"),
+                        args: vec!["--help".into()],
+                        health_url: None,
+                    },
+                    status: BackendStatus::Running,
+                    child: None,
+                    last_health: std::time::Instant::now(),
+                    failures: 0,
+                },
+            );
+            self.emit("pi", BackendStatus::Running);
+            Ok(())
+        } else {
+            self.emit("pi", BackendStatus::Crashed);
+            Err(format!("pi --help exited with {output}"))
         }
     }
 
@@ -203,48 +240,6 @@ pub fn backend_manager() -> &'static BackendManager {
 pub static BACKEND_MANAGER: Lazy<Arc<BackendManager>> =
     Lazy::new(|| BACKEND_MANAGER_ARC.clone());
 
-/// Resolve the bundled sidecar binary path at runtime.
-pub fn sidecar_path(name: &str) -> Result<PathBuf, String> {
-    let file = format!("{name}-x86_64-pc-windows-msvc.exe");
-
-    // Release mode: alongside the exe (Tauri bundle layout)
-    let exe = std::env::current_exe().map_err(|e| format!("current_exe: {e}"))?;
-    let exe_dir = exe.parent().ok_or("no exe parent dir")?;
-    let candidate = exe_dir.join("binaries").join(&file);
-    if candidate.exists() {
-        return Ok(candidate);
-    }
-
-    // Dev mode: exe_dir = src-tauri/target/debug, go up to project root
-    let dev = exe_dir
-        .parent() // target
-        .and_then(|p| p.parent()) // src-tauri
-        .map(|p| p.join("binaries").join(&file));
-    if let Some(ref path) = dev {
-        if path.exists() {
-            return Ok(path.clone());
-        }
-    }
-    // Fallback: also try target/debug parent (cargo run from src-tauri dir)
-    if let Some(parent) = exe_dir.parent() {
-        let alt = parent.join("binaries").join(&file);
-        if alt.exists() {
-            return Ok(alt);
-        }
-    }
-
-    Err(format!("sidecar binary not found: {name}"))
-}
-
-pub fn spawn_uniclaude_proxy() -> Result<(), String> {
-    // Port fallback: if port 9223 is occupied, restart will fail until the user
-    // edits ~/.lair/uniclaude-proxy-port.txt and restarts the backend from settings.
-    // Full automatic fallback is M4 work.
-    let path = sidecar_path("uniclaude-proxy")?;
-    BACKEND_MANAGER.start(ManagedBackend {
-        id: "uniclaude-proxy".into(),
-        program: path,
-        args: vec![],
-        health_url: Some("http://127.0.0.1:9223/health".into()),
-    })
+pub fn check_pi() -> Result<(), String> {
+    BACKEND_MANAGER.check_pi()
 }

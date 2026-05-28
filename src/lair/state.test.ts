@@ -100,12 +100,12 @@ describe("lair state", () => {
   });
 
   test("lane reload keeps active lane selectable", () => {
-    useLair.getState().setActiveLaneId("deepseek-pro");
+    useLair.getState().setActiveLaneId("pi-implementor");
 
     useLair.getState().setLanes([
       lane("claude", true),
-      lane("deepseek-pro", false),
-      lane("deepseek-flash", true),
+      lane("pi-implementor", false),
+      lane("pi-fast", true),
     ]);
 
     expect(useLair.getState().activeLaneId).toBe("claude");

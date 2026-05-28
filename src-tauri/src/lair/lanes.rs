@@ -148,38 +148,32 @@ enabled = true
 context_window = 200000
 
 [[lane]]
-id = "deepseek-pro"
-label = "DeepSeek Pro"
-cli = "claude"
-default_model = "claude-sonnet-4-5"
+id = "pi-implementor"
+label = "Pi Implementor"
+cli = "pi"
+default_model = "auto"
+default_effort = "medium"
 role = "implementor"
 cost_tier = "standard"
-clear_required = true
-backend = "uniclaude-proxy"
+clear_required = false
+backend = "pi"
 auto_bias = ["implement", "refactor", "design"]
-enabled = false
-context_window = 128000
-
-[lane.env]
-ANTHROPIC_BASE_URL = "http://127.0.0.1:9223"
-ANTHROPIC_AUTH_TOKEN = "dummy"
+enabled = true
+context_window = 200000
 
 [[lane]]
-id = "deepseek-flash"
-label = "DeepSeek Flash"
-cli = "claude"
-default_model = "claude-haiku-4-5"
+id = "pi-fast"
+label = "Pi Fast"
+cli = "pi"
+default_model = "auto"
+default_effort = "low"
 role = "implementor"
 cost_tier = "cheap"
-clear_required = true
-backend = "uniclaude-proxy"
+clear_required = false
+backend = "pi"
 auto_bias = ["test", "lint", "format"]
-enabled = false
-context_window = 64000
-
-[lane.env]
-ANTHROPIC_BASE_URL = "http://127.0.0.1:9223"
-ANTHROPIC_AUTH_TOKEN = "dummy"
+enabled = true
+context_window = 200000
 "#;
 
 #[cfg(test)]
@@ -209,8 +203,10 @@ mod tests {
             let content = fs::read_to_string(&p).unwrap();
             assert!(content.contains("id = \"claude\""));
             assert!(content.contains("id = \"codex\""));
-            assert!(content.contains("id = \"deepseek-pro\""));
-            assert!(content.contains("id = \"deepseek-flash\""));
+            assert!(content.contains("id = \"pi-implementor\""));
+            assert!(content.contains("id = \"pi-fast\""));
+            assert!(!content.contains("uniclaude-proxy"));
+            assert!(!content.contains("ANTHROPIC_BASE_URL"));
         });
     }
 

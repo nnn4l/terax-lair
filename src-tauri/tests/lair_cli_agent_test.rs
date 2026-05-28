@@ -1,7 +1,7 @@
 use std::sync::{Arc, Mutex};
 
 use terax_lib::lair::cli_agent::{run_agent_streaming, AgentSpawnRequest};
-use terax_lib::lair::types::Agent;
+use terax_lib::lair::types::{CostTier, Lane, LaneRole};
 
 #[tokio::test]
 async fn streams_chunks_from_fake_command() {
@@ -9,12 +9,27 @@ async fn streams_chunks_from_fake_command() {
     let cb_chunks = chunks.clone();
 
     let req = AgentSpawnRequest {
-        agent: Agent::Claude,
+        lane: Lane {
+            id: "test".into(),
+            label: "Test".into(),
+            cli: "claude".into(),
+            env: Default::default(),
+            default_model: None,
+            default_effort: None,
+            role: LaneRole::Implementor,
+            cost_tier: CostTier::Cheap,
+            clear_required: false,
+            backend: None,
+            auto_bias: vec![],
+            enabled: true,
+            context_window: None,
+        },
         prompt: "test".into(),
         system_prompt: String::new(),
-        model: None,
-        effort: None,
+        model_override: None,
+        effort_override: None,
         cwd: ".".into(),
+        card_id: "integration-streams-chunks".into(),
         program_override: Some(if cfg!(windows) {
             "cmd".into()
         } else {

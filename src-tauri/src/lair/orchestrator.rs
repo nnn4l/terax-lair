@@ -746,6 +746,9 @@ fn ensure_lane_backend_running(lane: &Lane) -> Result<(), String> {
     let Some(backend_id) = lane.backend.as_deref() else {
         return Ok(());
     };
+    if backend_id == "pi" {
+        return crate::lair::backend_manager::check_pi();
+    }
     if matches!(
         crate::lair::backend_manager::BACKEND_MANAGER.status(backend_id),
         BackendStatus::Running
@@ -920,7 +923,7 @@ pub fn lair_save_lane(
 
 #[tauri::command]
 pub fn lair_delete_lane(state: State<'_, Arc<LairState>>, lane_id: String) -> Result<(), String> {
-    let builtins = ["claude", "codex", "deepseek-pro", "deepseek-flash"];
+    let builtins = ["claude", "codex", "pi-implementor", "pi-fast"];
     if builtins.contains(&lane_id.as_str()) {
         return Err("cannot delete built-in lane; disable instead".into());
     }

@@ -118,12 +118,47 @@ fn build_command(
     let (program, args) = match lane.cli.as_str() {
         "claude" => build_claude(prompt, system_prompt, &effective_model, &effective_effort),
         "codex" => build_codex(prompt, system_prompt, &effective_model, &effective_effort),
+        "pi" => build_pi(&lane.id, prompt, system_prompt, &effective_model, &effective_effort),
         other => (other.to_string(), vec![prompt.to_string()]),
     };
     let resolved = resolve_program(&program);
     let mut full_args = resolved.prefix_args;
     full_args.extend(args);
     (resolved.program, full_args)
+}
+
+fn build_pi(
+    lane_id: &str,
+    prompt: &str,
+    system_prompt: &str,
+    model: &Option<String>,
+    effort: &Option<String>,
+) -> (String, Vec<String>) {
+    let mut args = vec![
+        "--mode".to_string(),
+        "json".to_string(),
+        "--session-id".to_string(),
+        format!("lair-{lane_id}"),
+        "--session-dir".to_string(),
+        ".lair/pi-sessions".to_string(),
+    ];
+    if let Some(m) = model {
+        if m != "auto" {
+            args.push("--model".to_string());
+            args.push(m.clone());
+        }
+    }
+    if let Some(e) = effort {
+        args.push("--thinking".to_string());
+        args.push(e.clone());
+    }
+    if !system_prompt.is_empty() {
+        args.push("--append-system-prompt".to_string());
+        args.push(system_prompt.to_string());
+    }
+    args.push("-p".to_string());
+    args.push(prompt.to_string());
+    ("pi".to_string(), args)
 }
 
 fn build_claude(
@@ -278,6 +313,44 @@ mod tests {
 
         assert_eq!(args[0], "exec");
         assert!(args.iter().any(|arg| arg == "--skip-git-repo-check"));
+    }
+
+    #[test]
+    fn pi_harness_uses_json_print_session_and_system_prompt() {
+        use crate::lair::types::{CostTier, LaneRole};
+        use std::collections::HashMap;
+
+        let lane = Lane {
+            id: "pi-implementor".into(),
+            label: "Pi Implementor".into(),
+            cli: "pi".into(),
+            env: HashMap::new(),
+            default_model: Some("openai/gpt-4o".into()),
+            default_effort: Some("medium".into()),
+            role: LaneRole::Implementor,
+            cost_tier: CostTier::Cheap,
+            clear_required: false,
+            backend: Some("pi".into()),
+            auto_bias: vec![],
+            enabled: true,
+            context_window: None,
+        };
+
+        let (_program, args) = build_command(
+            &lane,
+            "do the task",
+            "system rules",
+            &None,
+            &None,
+        );
+
+        assert!(args.windows(2).any(|w| w == ["--mode", "json"]));
+        assert!(args.windows(2).any(|w| w == ["--model", "openai/gpt-4o"]));
+        assert!(args.windows(2).any(|w| w == ["--thinking", "medium"]));
+        assert!(args.iter().any(|arg| arg == "--session-id"));
+        assert!(args.iter().any(|arg| arg == "--session-dir"));
+        assert!(args.windows(2).any(|w| w == ["-p", "do the task"]));
+        assert!(args.windows(2).any(|w| w == ["--append-system-prompt", "system rules"]));
     }
 
     #[tokio::test]

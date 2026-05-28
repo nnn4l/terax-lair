@@ -2,7 +2,7 @@
 
 ## Product
 
-**Lair** is a personal desktop workshop for driving Claude Code, Codex, and (soon) DeepSeek CLI agents from a single window. Forked from Terax AI; adds card-based summary chat, hierarchical task queue, multi-agent dispatch, pillar-anchored prompts, and a dashboard for cross-project orientation.
+**Lair** is a personal desktop workshop for driving Claude Code, Codex, and Pi agent-harness lanes from a single window. Forked from Terax AI; adds card-based summary chat, hierarchical task queue, multi-agent dispatch, pillar-anchored prompts, and a dashboard for cross-project orientation.
 
 ## Register
 
@@ -10,7 +10,7 @@ product
 
 ## Users
 
-One user (Nathan): high-school junior, game-developer-in-training, builds Cocos Creator and Unity projects, writes design specs in Obsidian, runs Claude Code + Codex daily, will run DeepSeek via UniClaudeProxy on the same machine. Sits at a desk. Has ADHD-adjacent attention patterns: struggles with wall-of-text; needs compact, scannable surfaces; needs visible "what's happening now" anchoring or loses thread.
+One user (Nathan): high-school junior, game-developer-in-training, builds Cocos Creator and Unity projects, writes design specs in Obsidian, runs Claude Code + Codex daily, and uses Pi as the local agent harness for cheap implementor lanes. Sits at a desk. Has ADHD-adjacent attention patterns: struggles with wall-of-text; needs compact, scannable surfaces; needs visible "what's happening now" anchoring or loses thread.
 
 Not for: teams, multi-user, anyone other than Nathan. No telemetry, no auth, no marketplace.
 

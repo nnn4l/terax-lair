@@ -25,8 +25,8 @@ export function LanesSettingsPanel() {
       .then(setLanes)
       .catch((err) => setError(String(err)))
       .finally(() => setLoading(false));
-    void getBackendStatus("uniclaude-proxy")
-      .then((status) => setBackendStatus("uniclaude-proxy", status))
+    void getBackendStatus("pi")
+      .then((status) => setBackendStatus("pi", status))
       .catch((err) => setError(String(err)));
     const backendEvents = onBackendStatusChanged((event) => {
       setBackendStatus(event.id, event.status);
@@ -53,17 +53,17 @@ export function LanesSettingsPanel() {
     }
   }
 
-  async function handleRestartProxy() {
+  async function handleCheckPi() {
     setRestarting(true);
     setError(null);
-    setBackendStatus("uniclaude-proxy", "starting");
+    setBackendStatus("pi", "starting");
     try {
-      await restartBackend("uniclaude-proxy");
-      const status = await getBackendStatus("uniclaude-proxy");
-      setBackendStatus("uniclaude-proxy", status);
+      await restartBackend("pi");
+      const status = await getBackendStatus("pi");
+      setBackendStatus("pi", status);
     } catch (err) {
       setError(String(err));
-      setBackendStatus("uniclaude-proxy", "crashed");
+      setBackendStatus("pi", "crashed");
     } finally {
       setRestarting(false);
     }
@@ -82,7 +82,7 @@ export function LanesSettingsPanel() {
     );
   }
 
-  const proxyStatus = backendStatuses["uniclaude-proxy"] ?? "stopped";
+  const piStatus = backendStatuses["pi"] ?? "stopped";
 
   return (
     <section className="flex flex-col gap-3 p-4">
@@ -94,27 +94,27 @@ export function LanesSettingsPanel() {
       </header>
 
       <div className="flex items-center gap-2 rounded-md border border-border bg-card/60 px-3 py-2">
-        <span className="text-[11px] text-muted-foreground">UniClaudeProxy</span>
+        <span className="text-[11px] text-muted-foreground">Pi harness</span>
         <span
           className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${
-            proxyStatus === "running"
+            piStatus === "running"
               ? "bg-emerald-500/10 text-emerald-500"
-              : proxyStatus === "starting"
+              : piStatus === "starting"
                 ? "bg-amber-500/10 text-amber-500"
-                : proxyStatus === "crashed"
+                : piStatus === "crashed"
                   ? "bg-destructive/10 text-destructive"
                   : "bg-muted/50 text-muted-foreground"
           }`}
         >
-          {proxyStatus}
+          {piStatus}
         </span>
         <button
           type="button"
           disabled={restarting}
-          onClick={() => void handleRestartProxy()}
+          onClick={() => void handleCheckPi()}
           className="ml-auto rounded-md border border-border px-2 py-0.5 text-[10.5px] text-muted-foreground hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
         >
-          {restarting ? "restarting" : "restart"}
+          {restarting ? "checking" : "check"}
         </button>
       </div>
 
@@ -163,7 +163,7 @@ export function LanesSettingsPanel() {
       </ul>
 
       <p className="text-[10.5px] text-muted-foreground">
-        DeepSeek lanes use the bundled UniClaudeProxy sidecar. Enable either to spawn the proxy on next send.
+        Pi lanes use the installed pi CLI directly. No Python proxy, sidecar, or local port is used.
       </p>
     </section>
   );

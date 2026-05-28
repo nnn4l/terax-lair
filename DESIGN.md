@@ -32,8 +32,8 @@ Per-agent accents on cards:
 
 - Claude lane: `border-orange-500/70`
 - Codex lane: `border-violet-500/70`
-- DeepSeek-Pro lane: `border-cyan-500/70`
-- DeepSeek-Flash lane: `border-teal-500/70`
+- Pi Implementor lane: `border-cyan-500/70`
+- Pi Fast lane: `border-teal-500/70`
 
 Use accents on left/full borders never as solo side-stripes. Card borders are full-perimeter at `/40`–`/70` opacity.
 

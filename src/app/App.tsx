@@ -282,9 +282,9 @@ export default function App() {
   }, []);
   useEffect(() => {
     void loadLanesIntoStore();
-    void getBackendStatus("uniclaude-proxy")
+    void getBackendStatus("pi")
       .then((status) => {
-        useLair.getState().setBackendStatus("uniclaude-proxy", status);
+        useLair.getState().setBackendStatus("pi", status);
       })
       .catch(() => {});
     const backendEvents = onBackendStatusChanged((event) => {
