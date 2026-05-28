@@ -4,6 +4,7 @@ pub mod cli_agent;
 pub mod doc_watcher;
 pub mod hub_tabs;
 pub mod keychain;
+pub mod lane_status;
 pub mod lanes;
 pub mod narrator;
 pub mod orchestrator;
