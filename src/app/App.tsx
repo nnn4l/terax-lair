@@ -57,7 +57,7 @@ import { QueuePanel } from "@/lair/components/QueuePanel";
 import { SpecImportModal } from "@/lair/components/SpecImportModal";
 import { TabStrip } from "@/lair/components/TabStrip";
 import { useHub } from "@/lair/hub";
-import { useLair } from "@/lair/state";
+import { loadLanesIntoStore, useLair } from "@/lair/state";
 import type { QueueItem } from "@/lair/types";
 import { resolveLairWorkspace } from "@/lair/workspace";
 import { FileExplorer, type FileExplorerHandle } from "@/modules/explorer";
@@ -276,6 +276,7 @@ export default function App() {
     }, 200);
   }, []);
   useEffect(() => {
+    void loadLanesIntoStore();
     return () => {
       if (sidebarWidthWriteTimerRef.current) {
         window.clearTimeout(sidebarWidthWriteTimerRef.current);
