@@ -14,6 +14,7 @@ import {
 } from "@/lair/api";
 import { useLair } from "@/lair/state";
 import { LanePicker } from "@/lair/components/LanePicker";
+import { PhaseDropdown } from "@/lair/components/PhaseDropdown";
 import { Card } from "@/lair/components/Card";
 import { CritiqueTray } from "@/lair/components/CritiqueTray";
 import { NarrationLine } from "@/lair/components/NarrationLine";
@@ -436,8 +437,9 @@ export function LairChat({ onClose }: { onClose?: () => void }) {
               }
             }}
           />
-          <div className="pointer-events-none absolute inset-x-2 bottom-2 flex items-center justify-between">
-            <div className="pointer-events-auto">
+          <div className="pointer-events-none absolute inset-x-3 bottom-2.5 flex items-center justify-between">
+            <div className="pointer-events-auto flex items-center gap-1.5">
+              <PhaseDropdown />
               <LanePicker />
             </div>
             <div className="pointer-events-auto flex items-center gap-1.5">
@@ -530,17 +532,21 @@ function EmptyState({ onPick }: { onPick: (text: string) => void }) {
   const workspaceLabel = workspace ? workspace.split(/[\\/]/).pop() || workspace : "no workspace";
   const currentItem = cursor.itemId ? findQueueItem(queue, cursor.itemId) : null;
 
-  const suggestions: { label: string; prompt: string }[] = currentItem
+  const suggestions = currentItem
     ? [
         { label: "Execute current task", prompt: "Execute this task." },
         { label: "Review the spec first", prompt: "Review the spec context before any edits." },
-        { label: "Ask for a plan", prompt: "Outline how you'd approach this task before doing it." },
+        { label: "Plan the approach", prompt: "Outline how you'd approach this task before implementing." },
       ]
-    : [
-        { label: "Plan this feature", prompt: "Plan this feature." },
-        { label: "Compare Claude and Codex", prompt: "Compare Claude and Codex on this task." },
-        { label: "Inspect repo", prompt: "Inspect this repo and tell me what it does in 5 lines." },
-      ];
+    : workspace
+      ? [
+          { label: "Summarize this repo", prompt: "Summarize what this repo does and its key files in 5 bullet points." },
+          { label: "What should I work on?", prompt: "Scan the queue and tell me what to work on next." },
+          { label: "Clean up", prompt: "Find dead code, duplicate code, and opportunities to simplify." },
+        ]
+      : [
+          { label: "Open a workspace", prompt: "Open a workspace to begin. Use the file explorer." },
+        ];
 
   return (
     <div className="flex h-full flex-col items-center justify-center gap-4 px-7 py-10 text-center">
@@ -550,7 +556,11 @@ function EmptyState({ onPick }: { onPick: (text: string) => void }) {
       <div className="space-y-1.5">
         <p className="text-[14px] font-semibold tracking-tight">Lair / {workspaceLabel}</p>
         <p className="text-[11.5px] leading-relaxed text-muted-foreground">
-          {currentItem ? `Current: ${currentItem.label}` : "Pick a starter or type a message."}
+          {currentItem
+            ? `Current: ${currentItem.label}`
+            : workspace
+              ? "Type a message or pick a starter."
+              : "Open a workspace to get started."}
         </p>
       </div>
       <div className="flex w-full flex-col gap-1.5">
