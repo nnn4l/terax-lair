@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { OrchestratorChatCard } from "@/lair/components/OrchestratorChatCard";
+import { TodayBriefing } from "@/lair/components/TodayBriefing";
 import { TodaysPlanCard } from "@/lair/components/TodaysPlanCard";
 import { WorkspaceLauncher } from "@/lair/components/WorkspaceLauncher";
 
@@ -21,7 +22,11 @@ export function DashboardView() {
         <OrchestratorChatCard />
       </Card>
       <Card>
-        <TodaysPlanCard />
+        <TodayBriefing />
+        <div className="border-t border-border/60" />
+        <div className="min-h-0 flex-1">
+          <TodaysPlanCard />
+        </div>
       </Card>
     </div>
   );

@@ -79,10 +79,10 @@ export function QueueItemMenu({ item, isPinned, onSendNow }: Props) {
           </button>
         </PopoverTrigger>
         <PopoverContent align="end" className="w-44 p-1">
-          <MenuItem icon={SentIcon} label="Send now" onClick={handleSend} />
+          <MenuItem icon={SentIcon} label="Run now" onClick={handleSend} />
           <MenuItem
             icon={PinIcon}
-            label={isPinned ? "Unpin" : "Pin"}
+            label={isPinned ? "Unpin next" : "Pin next"}
             onClick={() => void handlePin()}
           />
           <MenuItem
@@ -95,7 +95,7 @@ export function QueueItemMenu({ item, isPinned, onSendNow }: Props) {
           />
           <MenuItem
             icon={CheckmarkCircle02Icon}
-            label="Mark done"
+            label="Mark complete"
             onClick={() => void handleMarkDone()}
           />
           <MenuItem

@@ -10,6 +10,7 @@ import { useLair } from "@/lair/state";
 import type { QueueItem } from "@/lair/types";
 import { QueueControls } from "@/lair/components/QueueControls";
 import { QueueItemRow } from "@/lair/components/QueueItemRow";
+import { numberQueueItems } from "@/lair/components/queueNumbering";
 
 interface Props {
   onImportClick: () => void;
@@ -137,8 +138,10 @@ export function QueuePanel({ onImportClick, onSendItem }: Props) {
         </div>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto px-1 py-1">
-        {groups.map((group) => {
+        {groups.map((group, groupIndex) => {
           const collapsed = collapsedGroups.has(group.key);
+          const groupNumber = String(groupIndex + 1);
+          const rows = numberQueueItems(group.items);
           return (
             <section key={group.key} className="mb-1">
               <div className="group flex h-7 items-center gap-1 rounded-md px-1.5 text-[11px] text-muted-foreground hover:bg-muted/45">
@@ -155,6 +158,9 @@ export function QueuePanel({ onImportClick, onSendItem }: Props) {
                     strokeWidth={1.75}
                   />
                 </button>
+                <span className="w-5 shrink-0 text-right font-mono text-[10.5px] tabular-nums text-muted-foreground/70">
+                  {groupNumber}
+                </span>
                 <span className="min-w-0 flex-1 truncate font-medium" title={group.title}>
                   {group.label}
                 </span>
@@ -173,10 +179,12 @@ export function QueuePanel({ onImportClick, onSendItem }: Props) {
               </div>
               {collapsed ? null : (
                 <div>
-                  {group.items.map((item) => (
+                  {rows.map((row) => (
                     <QueueItemRow
-                      key={item.id}
-                      item={item}
+                      key={row.id}
+                      item={row.item}
+                      depth={row.depth}
+                      number={`${groupNumber}.${row.number}`}
                       currentId={cursor.itemId}
                       pinnedId={cursor.pinned ? cursor.itemId : null}
                       onSendNow={(id) => {

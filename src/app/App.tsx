@@ -49,7 +49,12 @@ import {
 import { getLaunchDir } from "@/lib/launchDir";
 import { quoteShellArg } from "@/lib/shellQuote";
 import { useZoom } from "@/lib/useZoom";
-import { sendMessage } from "@/lair/api";
+import {
+  getBackendStatus,
+  onBackendStatusChanged,
+  onLanesChanged,
+  sendMessage,
+} from "@/lair/api";
 import { DashboardView } from "@/lair/components/DashboardView";
 import { LairFloatingSidebar } from "@/lair/components/LairFloatingSidebar";
 import { OpenWorkspaceDialog } from "@/lair/components/OpenWorkspaceDialog";
@@ -277,10 +282,23 @@ export default function App() {
   }, []);
   useEffect(() => {
     void loadLanesIntoStore();
+    void getBackendStatus("uniclaude-proxy")
+      .then((status) => {
+        useLair.getState().setBackendStatus("uniclaude-proxy", status);
+      })
+      .catch(() => {});
+    const backendEvents = onBackendStatusChanged((event) => {
+      useLair.getState().setBackendStatus(event.id, event.status);
+    });
+    const laneEvents = onLanesChanged((lanes) => {
+      useLair.getState().setLanes(lanes);
+    });
     return () => {
       if (sidebarWidthWriteTimerRef.current) {
         window.clearTimeout(sidebarWidthWriteTimerRef.current);
       }
+      void backendEvents.then((unlisten) => unlisten());
+      void laneEvents.then((unlisten) => unlisten());
     };
   }, []);
 

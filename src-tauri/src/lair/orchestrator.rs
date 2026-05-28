@@ -974,3 +974,8 @@ fn kill_process(pid: u32) -> Result<(), String> {
 pub fn lair_restart_backend(backend_id: String) -> Result<(), String> {
     crate::lair::backend_manager::BACKEND_MANAGER.restart(&backend_id)
 }
+
+#[tauri::command]
+pub fn lair_get_backend_status(backend_id: String) -> BackendStatus {
+    crate::lair::backend_manager::BACKEND_MANAGER.status(&backend_id)
+}

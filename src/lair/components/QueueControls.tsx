@@ -35,7 +35,7 @@ export function QueueControls() {
         onClick={() => void api.queueSkip()}
         className="rounded-md bg-muted px-2 py-1 font-medium hover:bg-muted/80"
       >
-        skip
+        skip current
       </button>
       <select
         value={autopilot.mode}

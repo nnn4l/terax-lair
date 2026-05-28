@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type {
   BackendStatusEvent,
+  BackendStatus,
   CardUpdateEvent,
   ChecklistData,
   ChecklistSection,
@@ -263,6 +264,16 @@ export async function onBackendStatusChanged(
   cb: (event: BackendStatusEvent) => void,
 ): Promise<UnlistenFn> {
   return await listen<BackendStatusEvent>("lair-backend-status-changed", (e) => cb(e.payload));
+}
+
+export async function onLanesChanged(
+  cb: (lanes: Lane[]) => void,
+): Promise<UnlistenFn> {
+  return await listen<Lane[]>("lair-lanes-changed", (e) => cb(e.payload));
+}
+
+export async function getBackendStatus(backendId: string): Promise<BackendStatus> {
+  return await invoke<BackendStatus>("lair_get_backend_status", { backendId });
 }
 
 export async function restartBackend(backendId: string): Promise<void> {

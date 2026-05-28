@@ -205,25 +205,34 @@ pub static BACKEND_MANAGER: Lazy<Arc<BackendManager>> =
 
 /// Resolve the bundled sidecar binary path at runtime.
 pub fn sidecar_path(name: &str) -> Result<PathBuf, String> {
-    // Dev mode: check src-tauri/binaries first
-    if let Ok(cwd) = std::env::current_dir() {
-        let dev = cwd
-            .join("src-tauri")
-            .join("binaries")
-            .join(format!("{name}-x86_64-pc-windows-msvc.exe"));
-        if dev.exists() {
-            return Ok(dev);
-        }
-    }
-    // Release mode: alongside the exe
+    let file = format!("{name}-x86_64-pc-windows-msvc.exe");
+
+    // Release mode: alongside the exe (Tauri bundle layout)
     let exe = std::env::current_exe().map_err(|e| format!("current_exe: {e}"))?;
     let exe_dir = exe.parent().ok_or("no exe parent dir")?;
-    let candidate = exe_dir
-        .join("binaries")
-        .join(format!("{name}-x86_64-pc-windows-msvc.exe"));
+    let candidate = exe_dir.join("binaries").join(&file);
     if candidate.exists() {
         return Ok(candidate);
     }
+
+    // Dev mode: exe_dir = src-tauri/target/debug, go up to project root
+    let dev = exe_dir
+        .parent() // target
+        .and_then(|p| p.parent()) // src-tauri
+        .map(|p| p.join("binaries").join(&file));
+    if let Some(ref path) = dev {
+        if path.exists() {
+            return Ok(path.clone());
+        }
+    }
+    // Fallback: also try target/debug parent (cargo run from src-tauri dir)
+    if let Some(parent) = exe_dir.parent() {
+        let alt = parent.join("binaries").join(&file);
+        if alt.exists() {
+            return Ok(alt);
+        }
+    }
+
     Err(format!("sidecar binary not found: {name}"))
 }
 
