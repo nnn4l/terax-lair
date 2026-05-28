@@ -185,9 +185,14 @@ ANTHROPIC_AUTH_TOKEN = "dummy"
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Mutex;
     use tempfile::TempDir;
 
+    // LAIR_TEST_HOME is process-global; serialize tests so they don't stomp each other.
+    static TEST_LOCK: Mutex<()> = Mutex::new(());
+
     fn with_tmp_home<F: FnOnce(&str)>(f: F) {
+        let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let tmp = TempDir::new().expect("tmp");
         let home = tmp.path().to_string_lossy().to_string();
         std::env::set_var("LAIR_TEST_HOME", &home);
