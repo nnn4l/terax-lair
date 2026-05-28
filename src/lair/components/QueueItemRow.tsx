@@ -68,11 +68,6 @@ export function QueueItemRow({
           stale
         </span>
       ) : null}
-      {item.agent_hint ? (
-        <span className="shrink-0 rounded bg-muted px-1 text-[10px] text-muted-foreground">
-          {item.agent_hint}
-        </span>
-      ) : null}
       <QueueItemMenu
         item={item}
         isPinned={item.id === pinnedId}

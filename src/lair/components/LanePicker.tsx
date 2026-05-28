@@ -16,9 +16,16 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
-import { ModelDropdown } from "@/lair/components/ModelDropdown";
 import { useLair } from "@/lair/state";
-import type { Agent, Lane, LaneRole } from "@/lair/types";
+import type { Lane, LaneRole } from "@/lair/types";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import type { Agent } from "@/lair/types";
 
 const ROLE_ORDER: LaneRole[] = ["implementor", "reviewer", "consultant"];
 const ROLE_LABEL: Record<LaneRole, string> = {
@@ -80,6 +87,7 @@ export function LanePicker() {
   const userEffort = active?.cli === "codex" ? codexEffort : claudeEffort;
   const displayModel = isAuto ? null : userModel ?? active?.default_model ?? null;
   const displayEffort = isAuto ? null : userEffort ?? active?.default_effort ?? null;
+  const effortLetter: Record<string, string> = { low: "L", medium: "M", high: "H", xhigh: "X", max: "Mx" };
 
   const grouped = ROLE_ORDER
     .map((role) => ({
@@ -107,8 +115,8 @@ export function LanePicker() {
             </span>
           ) : null}
           {displayEffort ? (
-            <span className="text-[9.5px] text-muted-foreground/70">
-              {displayEffort}
+            <span className="rounded-md border border-border/60 bg-muted/45 px-0.5 font-mono text-[9px] text-muted-foreground">
+              {effortLetter[displayEffort] ?? displayEffort[0]}
             </span>
           ) : null}
           <HugeiconsIcon
@@ -119,7 +127,7 @@ export function LanePicker() {
           />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="min-w-60 rounded-xl">
+      <DropdownMenuContent align="start" className="min-w-64 rounded-xl">
         <div className="px-2 pt-1.5 pb-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
           Routing
         </div>
@@ -127,7 +135,7 @@ export function LanePicker() {
           lane={autoLane}
           active={activeLaneId === "auto"}
           onSelect={() => setActiveLaneId("auto")}
-          description="Route to best implementor for the task"
+          description="Best implementor for the task"
         />
         <DropdownMenuSeparator />
         {grouped.map((g) => (
@@ -164,7 +172,7 @@ export function LanePicker() {
                         : lane.backend
                           ? `LARPING ${lane.default_model?.replace(/^claude-/, "").replace(/(\d)-(\d)/g, "$1.$2") ?? "—"}`
                           : lane.default_model
-                            ? `${lane.default_model.replace(/^claude-/, "").replace(/(\d)-(\d)/g, "$1.$2")} · ${COST_LABEL[lane.cost_tier] ?? lane.cost_tier}`
+                            ? `${lane.default_model.replace(/^claude-/, "").replace(/(\d)-(\d)/g, "$1.$2")}. ${COST_LABEL[lane.cost_tier] ?? lane.cost_tier}`
                             : COST_LABEL[lane.cost_tier] ?? lane.cost_tier
                   }
                 />
@@ -252,8 +260,8 @@ function LaneModelRow({ agent }: { agent: Agent }) {
   const label = agent === "claude" ? "Claude" : "Codex";
   const description =
     agent === "claude"
-      ? "Model and effort for Claude lanes"
-      : "Effort for Codex CLI lanes";
+      ? "Effort for Claude lanes"
+      : "Effort for Codex lanes";
   return (
     <div className="mx-1 my-0.5 flex min-h-9 items-center gap-2 rounded-md px-2 py-1.5 text-[12px] hover:bg-accent/35">
       <HugeiconsIcon
@@ -269,8 +277,49 @@ function LaneModelRow({ agent }: { agent: Agent }) {
         </span>
       </span>
       <div className="min-w-0 shrink-0">
-        <ModelDropdown agent={agent} variant="menu" />
+        <EffortOnlyDropdown agent={agent} />
       </div>
     </div>
+  );
+}
+
+const EFFORTS = [
+  { value: "low", label: "L" },
+  { value: "medium", label: "M" },
+  { value: "high", label: "H" },
+  { value: "xhigh", label: "X" },
+  { value: "max", label: "Mx" },
+];
+
+function EffortOnlyDropdown({ agent }: { agent: Agent }) {
+  const claudeEffort = useLair((s) => s.claudeEffort);
+  const codexEffort = useLair((s) => s.codexEffort);
+  const setClaudeEffort = useLair((s) => s.setClaudeEffort);
+  const setCodexEffort = useLair((s) => s.setCodexEffort);
+  const effort = agent === "claude" ? claudeEffort : codexEffort;
+  const setEffort = agent === "claude" ? setClaudeEffort : setCodexEffort;
+
+  return (
+    <Select
+      value={effort ?? "__none__"}
+      onValueChange={(v) => setEffort(v === "__none__" ? null : v)}
+    >
+      <SelectTrigger
+        size="sm"
+        className="h-5 min-w-[3.75rem] justify-end gap-1 rounded-md border-0 bg-transparent px-1 py-0 text-[10.5px] font-medium text-foreground/85 shadow-none hover:bg-accent/60 disabled:opacity-40 [&>svg]:size-3"
+      >
+        <SelectValue placeholder="effort" />
+      </SelectTrigger>
+      <SelectContent className="min-w-24 rounded-md">
+        <SelectItem value="__none__" className="rounded-sm py-1 pr-6 pl-2 text-[11px]">
+          default
+        </SelectItem>
+        {EFFORTS.map((e) => (
+          <SelectItem key={e.value} value={e.value} className="rounded-sm py-1 pr-6 pl-2 text-[11px]">
+            {e.label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
   );
 }
