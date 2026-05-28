@@ -581,9 +581,9 @@ export function TurnView({
     .filter((n): n is NarrationData => Boolean(n));
 
   return (
-    <div className="group/turn flex flex-col gap-2">
+    <div className="group/turn flex flex-col gap-2.5">
       <div data-lair-role="user" className="flex flex-col items-end gap-1">
-        <div className="max-w-[88%] rounded-lg rounded-br-sm border border-border/50 bg-muted/60 px-2.5 py-2 shadow-sm">
+        <div className="max-w-[85%] rounded-xl rounded-br-sm border border-white/5 bg-white/[0.03] px-3 py-2">
           <p className="whitespace-pre-wrap text-[13px] font-medium leading-relaxed text-foreground/90">
             {turn.prompt}
           </p>
@@ -598,11 +598,6 @@ export function TurnView({
         </div>
       </div>
       <div data-lair-role="assistant" className="flex flex-col gap-1.5">
-        <div className="px-0.5">
-          <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground/60">
-            Response
-          </span>
-        </div>
         {turnNarrations.map((n) => (
           <NarrationLine key={n.id} line={n} />
         ))}
@@ -634,8 +629,8 @@ export function TurnView({
 
 function ThinkingState() {
   return (
-    <div className="rounded-lg border border-border/50 bg-card/70 px-2.5 py-2 text-[12px] text-muted-foreground shadow-sm">
-      <span className="mr-2 inline-block size-1.5 animate-pulse rounded-full bg-primary/70 align-middle" />
+    <div className="rounded-xl border border-white/5 bg-white/[0.03] px-3 py-2.5 text-[12px] text-muted-foreground">
+      <span className="mr-2 inline-block size-1.5 animate-pulse rounded-full bg-foreground/40 align-middle" />
       <span>Thinking</span>
     </div>
   );

@@ -21,8 +21,9 @@ export function Card({ card }: { card: CardData }) {
   }
 
   return (
-    <div className="my-2 rounded-lg border border-border bg-card/70 px-2.5 py-2">
-      <div className="mb-1.5 flex items-center justify-between gap-3">
+    <div className="my-2 overflow-hidden rounded-xl border border-white/5 bg-white/[0.03] backdrop-blur-sm">
+      <div className="h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
+      <div className="px-3 py-2.5">
         <div className="flex min-w-0 items-center gap-2">
           <span className="shrink-0 text-[12px] font-semibold tracking-tight">
             {label}
@@ -63,7 +64,7 @@ export function Card({ card }: { card: CardData }) {
               {card.outcome}
             </MessageResponse>
           ) : null}
-          <div className="mt-2 flex items-center gap-3 border-t border-border/40 pt-1.5">
+          <div className="flex items-center gap-3 border-t border-white/5 pt-2">
             <button
               type="button"
               className="text-[11px] font-medium text-primary hover:underline"
