@@ -43,6 +43,10 @@ export function LanePicker() {
   const activeLaneId = useLair((s) => s.activeLaneId);
   const setActiveLaneId = useLair((s) => s.setActiveLaneId);
   const backendStatuses = useLair((s) => s.backendStatuses);
+  const claudeModel = useLair((s) => s.claudeModel);
+  const codexModel = useLair((s) => s.codexModel);
+  const claudeEffort = useLair((s) => s.claudeEffort);
+  const codexEffort = useLair((s) => s.codexEffort);
 
   const allLanes = lanes; // show all lanes including disabled
   const autoLane: Lane = {
@@ -69,6 +73,12 @@ export function LanePicker() {
     allLanes[0];
   const ActiveIcon = active ? ROLE_ICON[active.role] : CodeIcon;
 
+  // Resolve display model: user override from Run Settings > lane default
+  const userModel = active?.cli === "codex" ? codexModel : claudeModel;
+  const userEffort = active?.cli === "codex" ? codexEffort : claudeEffort;
+  const displayModel = userModel ?? active?.default_model ?? null;
+  const displayEffort = userEffort ?? active?.default_effort ?? null;
+
   const grouped = ROLE_ORDER
     .map((role) => ({
       role,
@@ -87,6 +97,16 @@ export function LanePicker() {
         >
           <HugeiconsIcon icon={ActiveIcon} size={11} strokeWidth={1.75} />
           <span className="max-w-[5.5rem] truncate">{active?.label ?? "—"}</span>
+          {displayModel ? (
+            <span className="rounded-md border border-border/60 bg-muted/45 px-1 font-mono text-[9.5px] text-muted-foreground">
+              {displayModel.replace(/^claude-/, "").replace(/(\d)-(\d)/g, "$1.$2")}
+            </span>
+          ) : null}
+          {displayEffort ? (
+            <span className="text-[9.5px] text-muted-foreground/70">
+              {displayEffort}
+            </span>
+          ) : null}
           <HugeiconsIcon
             icon={ArrowDown01Icon}
             size={10}
