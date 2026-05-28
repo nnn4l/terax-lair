@@ -3,12 +3,14 @@ mod modules;
 
 use lair::checklist::ChecklistWatcher;
 use lair::orchestrator::{
-    lair_append_checklist_item, lair_delete_checklist_item, lair_dispatch_critiques,
-    lair_import_spec, lair_list_models, lair_list_specs, lair_paste_spec,
-    lair_queue_check_stale, lair_queue_drop, lair_queue_edit_context, lair_queue_get,
-    lair_queue_mark_done, lair_queue_pause, lair_queue_pin, lair_queue_resync,
-    lair_queue_resume, lair_queue_set_autopilot, lair_queue_skip, lair_queue_unpin,
-    lair_read_checklist, lair_read_pillars, lair_run_pillar_check, lair_send_message,
+    lair_append_checklist_item, lair_clear_lane, lair_delete_checklist_item,
+    lair_delete_lane, lair_dispatch_critiques, lair_get_all_lane_status,
+    lair_get_lane_status, lair_import_spec, lair_list_lanes, lair_list_models,
+    lair_list_specs, lair_paste_spec, lair_queue_check_stale, lair_queue_drop,
+    lair_queue_edit_context, lair_queue_get, lair_queue_mark_done, lair_queue_pause,
+    lair_queue_pin, lair_queue_resync, lair_queue_resume, lair_queue_set_autopilot,
+    lair_queue_skip, lair_queue_unpin, lair_read_checklist, lair_read_pillars,
+    lair_run_pillar_check, lair_save_lane, lair_send_message, lair_stop_card,
     lair_toggle_checklist_item, lair_watch_checklist, LairConfig, LairState,
 };
 use lair::hub_tabs::{
@@ -243,6 +245,13 @@ pub fn run() {
             lair_read_pillars,
             lair_run_pillar_check,
             lair_dispatch_critiques,
+            lair_list_lanes,
+            lair_save_lane,
+            lair_delete_lane,
+            lair_get_lane_status,
+            lair_get_all_lane_status,
+            lair_clear_lane,
+            lair_stop_card,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

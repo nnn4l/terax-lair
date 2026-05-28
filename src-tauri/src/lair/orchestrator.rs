@@ -7,7 +7,7 @@ use crate::lair::doc_watcher::WatcherHandle;
 use crate::lair::keychain::get_openrouter_key;
 use crate::lair::narrator::{narrate, NarrationTrigger};
 use crate::lair::parser_client::{
-    judge_outcome, list_models, route_agent, summarize_output, ModelInfo, RouteRequest, RouteResult,
+    judge_outcome, list_models, summarize_output, ModelInfo, RouteRequest, RouteResult,
     SummarizeRequest,
 };
 use crate::lair::phase_prompts::system_prompt_for;
@@ -37,6 +37,9 @@ pub struct LairState {
     pub pillar_cache: Mutex<HashMap<String, String>>,
     pub pillar_watchers: Mutex<HashMap<String, crate::lair::pillars::WatcherHandle>>,
     pub was_all_checked: Mutex<bool>,
+    pub lane_status: Arc<crate::lair::lane_status::LaneStatusStore>,
+    pub lanes_cache: Mutex<Vec<Lane>>,
+    pub lanes_watcher: Mutex<Option<crate::lair::lanes::WatcherHandle>>,
 }
 
 impl LairState {
@@ -47,6 +50,9 @@ impl LairState {
             pillar_cache: Mutex::new(HashMap::new()),
             pillar_watchers: Mutex::new(HashMap::new()),
             was_all_checked: Mutex::new(false),
+            lane_status: Arc::new(crate::lair::lane_status::LaneStatusStore::new()),
+            lanes_cache: Mutex::new(Vec::new()),
+            lanes_watcher: Mutex::new(None),
         })
     }
 }
@@ -859,4 +865,105 @@ fn now_ms() -> u64 {
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
         .as_millis() as u64
+}
+
+// ---- M3: Lane commands ----
+
+fn ensure_lanes_loaded(state: &Arc<LairState>) -> Result<Vec<Lane>, String> {
+    {
+        let cache = state.lanes_cache.lock().unwrap();
+        if !cache.is_empty() {
+            return Ok(cache.clone());
+        }
+    }
+    let lanes = crate::lair::lanes::load()?;
+    *state.lanes_cache.lock().unwrap() = lanes.clone();
+    Ok(lanes)
+}
+
+#[tauri::command]
+pub fn lair_list_lanes() -> Result<Vec<Lane>, String> {
+    crate::lair::lanes::load()
+}
+
+#[tauri::command]
+pub fn lair_save_lane(
+    state: State<'_, Arc<LairState>>,
+    lane: Lane,
+) -> Result<(), String> {
+    let mut lanes = crate::lair::lanes::load()?;
+    if let Some(existing) = lanes.iter_mut().find(|l| l.id == lane.id) {
+        *existing = lane;
+    } else {
+        lanes.push(lane);
+    }
+    crate::lair::lanes::save(&lanes)?;
+    *state.lanes_cache.lock().unwrap() = lanes;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn lair_delete_lane(state: State<'_, Arc<LairState>>, lane_id: String) -> Result<(), String> {
+    let builtins = ["claude", "codex", "deepseek-pro", "deepseek-flash"];
+    if builtins.contains(&lane_id.as_str()) {
+        return Err("cannot delete built-in lane; disable instead".into());
+    }
+    let mut lanes = crate::lair::lanes::load()?;
+    lanes.retain(|l| l.id != lane_id);
+    crate::lair::lanes::save(&lanes)?;
+    *state.lanes_cache.lock().unwrap() = lanes;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn lair_get_lane_status(
+    state: State<'_, Arc<LairState>>,
+    lane_id: String,
+) -> Option<LaneStatus> {
+    state.lane_status.get(&lane_id)
+}
+
+#[tauri::command]
+pub fn lair_get_all_lane_status(state: State<'_, Arc<LairState>>) -> Vec<LaneStatus> {
+    state.lane_status.all()
+}
+
+#[tauri::command]
+pub async fn lair_clear_lane(
+    app: AppHandle,
+    state: State<'_, Arc<LairState>>,
+    lane_id: String,
+) -> Result<(), String> {
+    state.lane_status.clear(&lane_id);
+    let _ = app.emit("lair-lane-cleared", &lane_id);
+    Ok(())
+}
+
+// ---- M3: Stop card ----
+
+#[tauri::command]
+pub fn lair_stop_card(card_id: String) -> Result<(), String> {
+    let pid = crate::lair::process_registry::PROCESS_REGISTRY
+        .take(&card_id)
+        .ok_or("card not running or already done")?;
+    kill_process(pid)
+}
+
+#[cfg(windows)]
+fn kill_process(pid: u32) -> Result<(), String> {
+    use std::process::Command as StdCommand;
+    let output = StdCommand::new("taskkill")
+        .args(["/F", "/T", "/PID", &pid.to_string()])
+        .output()
+        .map_err(|e| format!("taskkill: {e}"))?;
+    if !output.status.success() {
+        return Err(String::from_utf8_lossy(&output.stderr).to_string());
+    }
+    Ok(())
+}
+
+#[cfg(not(windows))]
+fn kill_process(pid: u32) -> Result<(), String> {
+    // Not used on non-Windows for M3; stub
+    Err(format!("kill not implemented for pid {pid}"))
 }
