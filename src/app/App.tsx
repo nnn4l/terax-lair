@@ -996,7 +996,8 @@ export default function App() {
     void sendMessage({
       turn_id: turnId,
       prompt,
-      agent_choice: item.agent_hint ?? state.agentChoice,
+      lane_id: (item.agent_hint as string) ?? state.activeLaneId ?? "claude",
+      use_auto: false,
       phase: state.phase,
       workspace: state.workspace,
       task_context: {

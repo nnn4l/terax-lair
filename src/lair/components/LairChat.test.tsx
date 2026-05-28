@@ -1,20 +1,16 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, test } from "vitest";
-import { AgentDropdown } from "@/lair/components/AgentDropdown";
 import { Card } from "@/lair/components/Card";
+import { LanePicker } from "@/lair/components/LanePicker";
 import { LairChat, TurnView } from "@/lair/components/LairChat";
-import { ModelDropdown } from "@/lair/components/ModelDropdown";
 import { PhaseDropdown } from "@/lair/components/PhaseDropdown";
 import { useLair } from "@/lair/state";
 import type { CardData } from "@/lair/types";
 
 describe("LairChat components", () => {
-  test("agent picker defaults to text-only Codex-first choices", () => {
-    const html = renderToStaticMarkup(<AgentDropdown />);
-    expect(html).toContain('data-slot="dropdown-menu-trigger"');
-    expect(html).toContain("CLI agent: Codex");
-    expect(html).toContain("Codex");
-    expect(html).not.toContain("<option");
+  test("lane picker renders a Select trigger", () => {
+    const html = renderToStaticMarkup(<LanePicker />);
+    expect(html).toContain('data-slot="select-trigger"');
   });
 
   test("phase picker renders every Lair phase", () => {
@@ -99,14 +95,29 @@ describe("LairChat components", () => {
     expect(html).not.toContain("waiting...");
   });
 
-  test("codex model row hides model pill and stale OpenAI model IDs", () => {
-    useLair.setState({ codexModel: "gpt-5" });
-
-    const html = renderToStaticMarkup(<ModelDropdown agent="codex" />);
-
-    expect(html).not.toContain("cli default");
-    expect(html).not.toContain("gpt-5");
-    expect(html).toContain("effort");
+  test("lane picker shows with lane data loaded", () => {
+    useLair.setState({
+      lanes: [
+        {
+          id: "claude",
+          label: "Claude",
+          cli: "claude",
+          env: {},
+          default_model: "claude-opus-4-5",
+          default_effort: "medium",
+          role: "implementor",
+          cost_tier: "expensive",
+          clear_required: false,
+          backend: null,
+          auto_bias: [],
+          enabled: true,
+          context_window: 200000,
+        },
+      ],
+      activeLaneId: "claude",
+    });
+    const html = renderToStaticMarkup(<LanePicker />);
+    expect(html).toContain('data-slot="select-trigger"');
   });
 
   test("card renders raw output when summary is unavailable", () => {

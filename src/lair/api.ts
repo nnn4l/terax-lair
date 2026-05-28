@@ -1,10 +1,13 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type {
+  BackendStatusEvent,
   CardUpdateEvent,
   ChecklistData,
   ChecklistSection,
   HubState,
+  Lane,
+  LaneStatus,
   ModelInfo,
   NarrationEvent,
   AutopilotMode,
@@ -218,4 +221,52 @@ export async function onSpecComplete(
   return await listen<SpecCompleteEvent>("lair-spec-complete", (event) =>
     cb(event.payload),
   );
+}
+
+// ---- M3: Lane + Stop API ----
+
+export async function listLanes(): Promise<Lane[]> {
+  return await invoke<Lane[]>("lair_list_lanes");
+}
+
+export async function saveLane(lane: Lane): Promise<void> {
+  await invoke("lair_save_lane", { lane });
+}
+
+export async function deleteLane(laneId: string): Promise<void> {
+  await invoke("lair_delete_lane", { laneId });
+}
+
+export async function getLaneStatus(laneId: string): Promise<LaneStatus | null> {
+  return await invoke<LaneStatus | null>("lair_get_lane_status", { laneId });
+}
+
+export async function getAllLaneStatus(): Promise<LaneStatus[]> {
+  return await invoke<LaneStatus[]>("lair_get_all_lane_status");
+}
+
+export async function clearLane(laneId: string): Promise<void> {
+  await invoke("lair_clear_lane", { laneId });
+}
+
+export async function stopCard(cardId: string): Promise<void> {
+  await invoke("lair_stop_card", { cardId });
+}
+
+export async function onLaneStatusChanged(
+  cb: (status: LaneStatus) => void,
+): Promise<UnlistenFn> {
+  return await listen<LaneStatus>("lair-lane-status-changed", (e) => cb(e.payload));
+}
+
+export async function onBackendStatusChanged(
+  cb: (event: BackendStatusEvent) => void,
+): Promise<UnlistenFn> {
+  return await listen<BackendStatusEvent>("lair-backend-status-changed", (e) => cb(e.payload));
+}
+
+export async function onLaneCleared(
+  cb: (laneId: string) => void,
+): Promise<UnlistenFn> {
+  return await listen<string>("lair-lane-cleared", (e) => cb(e.payload));
 }

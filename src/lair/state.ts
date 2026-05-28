@@ -3,9 +3,12 @@ import { persist } from "zustand/middleware";
 import type {
   AgentChoice,
   ApprovalGate,
+  BackendStatus,
   CardData,
   ChecklistData,
   AutopilotMode,
+  Lane,
+  LaneStatus,
   ModelInfo,
   NarrationLine,
   Phase,
@@ -45,6 +48,11 @@ interface LairState {
   critiqueDrafts: string[];
   critiqueTrayOpen: boolean;
   pillarCheckPending: boolean;
+  // M3: Lanes
+  lanes: Lane[];
+  laneStatuses: Record<string, LaneStatus>;
+  backendStatuses: Record<string, BackendStatus>;
+  activeLaneId: string;
 
   upsertCard: (card: CardData, turnId?: string) => void;
   appendChunk: (id: string, chunk: string) => void;
@@ -72,6 +80,10 @@ interface LairState {
   toggleCritiqueTray: () => void;
   setCritiqueTrayOpen: (open: boolean) => void;
   setPillarCheckPending: (pending: boolean) => void;
+  setLanes: (lanes: Lane[]) => void;
+  setLaneStatus: (status: LaneStatus) => void;
+  setBackendStatus: (id: string, status: BackendStatus) => void;
+  setActiveLaneId: (id: string) => void;
   newSession: (title?: string) => string;
   switchSession: (id: string) => void;
   deleteSession: (id: string) => void;
@@ -124,6 +136,12 @@ function migratePersistedState(persistedState: unknown): unknown {
   return obj;
 }
 
+export async function loadLanesIntoStore() {
+  const { listLanes } = await import("@/lair/api");
+  const lanes = await listLanes();
+  useLair.getState().setLanes(lanes);
+}
+
 export const useLair = create<LairState>()(
   persist(
     (set) => ({
@@ -152,6 +170,10 @@ export const useLair = create<LairState>()(
       critiqueDrafts: [],
       critiqueTrayOpen: false,
       pillarCheckPending: false,
+      lanes: [],
+      laneStatuses: {},
+      backendStatuses: {},
+      activeLaneId: "claude",
 
       upsertCard: (card, turnId) =>
         set((state) => {
@@ -292,6 +314,16 @@ export const useLair = create<LairState>()(
       setCritiqueTrayOpen: (critiqueTrayOpen) => set({ critiqueTrayOpen }),
       setPillarCheckPending: (pillarCheckPending) =>
         set({ pillarCheckPending }),
+      setLanes: (lanes) => set({ lanes }),
+      setLaneStatus: (status) =>
+        set((s) => ({
+          laneStatuses: { ...s.laneStatuses, [status.lane_id]: status },
+        })),
+      setBackendStatus: (id, status) =>
+        set((s) => ({
+          backendStatuses: { ...s.backendStatuses, [id]: status },
+        })),
+      setActiveLaneId: (activeLaneId) => set({ activeLaneId }),
       newSession: (title) => {
         const now = Date.now();
         const id = createId("s");
@@ -303,7 +335,7 @@ export const useLair = create<LairState>()(
             updatedAt: now,
             workspace: state.workspace,
             phase: state.phase,
-            agentChoice: state.agentChoice,
+            agentChoice: state.agentChoice as AgentChoice, // M3: retained for legacy data
             turnIds: [],
             turns: [],
             cards: [],
@@ -425,8 +457,29 @@ export const useLair = create<LairState>()(
     }),
     {
       name: "lair-state",
-      version: 2,
-      migrate: migratePersistedState,
+      version: 3,
+      migrate: (persistedState: unknown, version: number) => {
+        let obj = migratePersistedState(persistedState);
+        if (typeof obj === "object" && obj !== null && version < 3) {
+          const o = obj as Record<string, unknown>;
+          if (typeof o.agentChoice === "string") {
+            const map: Record<string, string> = {
+              claude: "claude",
+              codex: "codex",
+              auto: "auto",
+              compare: "claude",
+            };
+            (o as any).activeLaneId = map[o.agentChoice as string] ?? "claude";
+          }
+          if (!(o as any).activeLaneId) {
+            (o as any).activeLaneId = "claude";
+          }
+          if (!(o as any).lanes) (o as any).lanes = [];
+          if (!(o as any).laneStatuses) (o as any).laneStatuses = {};
+          if (!(o as any).backendStatuses) (o as any).backendStatuses = {};
+        }
+        return obj as never;
+      },
       partialize: (state) => ({
         cards: state.cards,
         narrations: state.narrations,
@@ -445,6 +498,8 @@ export const useLair = create<LairState>()(
         modelsFetchedAt: state.modelsFetchedAt,
         critiqueDrafts: state.critiqueDrafts,
         critiqueTrayOpen: state.critiqueTrayOpen,
+        lanes: state.lanes,
+        activeLaneId: state.activeLaneId,
       }),
     },
   ),

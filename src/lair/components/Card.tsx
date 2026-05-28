@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { MessageResponse } from "@/components/ai-elements/message";
-import { appendChecklistItem } from "@/lair/api";
+import { appendChecklistItem, stopCard } from "@/lair/api";
+import { HugeiconsIcon } from "@hugeicons/react";
+import { StopCircleIcon } from "@hugeicons/core-free-icons";
 import { useLair } from "@/lair/state";
 import type { CardData, ChecklistSection } from "@/lair/types";
 import { UsageBadge } from "@/lair/components/UsageBadge";
@@ -44,6 +46,17 @@ export function Card({ card }: { card: CardData }) {
           ) : null}
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
+          {(card.status === "streaming" || card.status === "summarizing") ? (
+            <button
+              type="button"
+              onClick={() => void stopCard(card.id)}
+              className="flex size-5 items-center justify-center rounded text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+              aria-label="Stop"
+              title="Stop (Cmd+.)"
+            >
+              <HugeiconsIcon icon={StopCircleIcon} size={12} strokeWidth={1.75} />
+            </button>
+          ) : null}
           {card.usage ? <UsageBadge usage={card.usage} /> : null}
           <StatusBadge status={card.status} />
         </div>
@@ -132,6 +145,14 @@ export function Card({ card }: { card: CardData }) {
           {card.raw_output ? <RawOutput rawOutput={card.raw_output} /> : null}
         </div>
       ) : null}
+
+      {card.status === "stopped" ? (
+        <div data-lair-card-section="issue" className="px-3 py-2.5">
+          <SectionLabel>stopped</SectionLabel>
+          <p className="text-[12px] text-muted-foreground">stopped by user</p>
+          {card.raw_output ? <RawOutput rawOutput={card.raw_output} /> : null}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -208,12 +229,14 @@ function StatusBadge({ status }: { status: CardData["status"] }) {
     summarizing: "summarizing",
     done: "done",
     failed: "failed",
+    stopped: "stopped",
   };
   const tone: Record<CardData["status"], string> = {
     streaming: "border-primary/25 bg-primary/10 text-primary",
     summarizing: "border-border/60 bg-muted/50 text-muted-foreground",
     done: "border-emerald-500/25 bg-emerald-500/10 text-emerald-500",
     failed: "border-destructive/30 bg-destructive/10 text-destructive",
+    stopped: "border-border/60 bg-muted/50 text-muted-foreground",
   };
   return (
     <span className={`rounded-md border px-1.5 py-0.5 text-[10.5px] ${tone[status]}`}>

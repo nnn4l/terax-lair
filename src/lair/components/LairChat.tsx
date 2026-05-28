@@ -10,9 +10,10 @@ import {
   queueCheckStale,
   queueGet,
   queueUnpin,
+  stopCard,
 } from "@/lair/api";
 import { useLair } from "@/lair/state";
-import { AgentDropdown } from "@/lair/components/AgentDropdown";
+import { LanePicker } from "@/lair/components/LanePicker";
 import { Card } from "@/lair/components/Card";
 import { CritiqueTray } from "@/lair/components/CritiqueTray";
 import { NarrationLine } from "@/lair/components/NarrationLine";
@@ -61,7 +62,7 @@ export function LairChat({ onClose }: { onClose?: () => void }) {
   const attachCardIds = useLair((state) => state.attachCardIds);
   const workspace = useLair((state) => state.workspace);
   const phase = useLair((state) => state.phase);
-  const agentChoice = useLair((state) => state.agentChoice);
+  const activeLaneId = useLair((state) => state.activeLaneId);
   const claudeModel = useLair((s) => s.claudeModel);
   const codexModel = useLair((s) => s.codexModel);
   const claudeEffort = useLair((s) => s.claudeEffort);
@@ -101,6 +102,20 @@ export function LairChat({ onClose }: { onClose?: () => void }) {
       void narrationSub.then((unlisten) => unlisten());
     };
   }, [appendChunk, upsertCard, addNarration]);
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && e.key === ".") {
+        e.preventDefault();
+        const inflight = useLair.getState().cards.find(
+          (c) => c.status === "streaming" || c.status === "summarizing",
+        );
+        if (inflight) void stopCard(inflight.id);
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   useEffect(() => {
     const sub = onSpecComplete(() => {
@@ -214,7 +229,8 @@ export function LairChat({ onClose }: { onClose?: () => void }) {
       const ids = await sendMessage({
         turn_id: turnId,
         prompt,
-        agent_choice: agentChoice,
+        lane_id: activeLaneId === "auto" ? "auto" : activeLaneId,
+        use_auto: activeLaneId === "auto",
         phase,
         workspace,
         task_context: currentItem
@@ -257,7 +273,8 @@ export function LairChat({ onClose }: { onClose?: () => void }) {
       const ids = await sendMessage({
         turn_id: turnId,
         prompt,
-        agent_choice: item.agent_hint ?? state.agentChoice,
+        lane_id: item.agent_hint ?? state.activeLaneId,
+        use_auto: false,
         phase: state.phase,
         workspace: state.workspace,
         task_context: {
@@ -435,7 +452,7 @@ export function LairChat({ onClose }: { onClose?: () => void }) {
           />
           <div className="pointer-events-none absolute inset-x-2 bottom-2 flex items-center justify-between">
             <div className="pointer-events-auto">
-              <AgentDropdown />
+              <LanePicker />
             </div>
             <div className="pointer-events-auto flex items-center gap-1.5">
               <button
