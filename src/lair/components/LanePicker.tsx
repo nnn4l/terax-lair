@@ -2,6 +2,7 @@ import {
   ArrowDown01Icon,
   ClaudeIcon,
   CodeIcon,
+  Route01Icon,
   SparklesIcon,
   Tick02Icon,
 } from "@hugeicons/core-free-icons";
@@ -71,13 +72,14 @@ export function LanePicker() {
     (activeLaneId === "auto" ? autoLane : null) ??
     allLanes.find((l) => l.enabled) ??
     allLanes[0];
-  const ActiveIcon = active ? ROLE_ICON[active.role] : CodeIcon;
+  const isAuto = active?.id === "auto";
+  const ActiveIcon = isAuto ? Route01Icon : active ? ROLE_ICON[active.role] : CodeIcon;
 
   // Resolve display model: user override from Run Settings > lane default
   const userModel = active?.cli === "codex" ? codexModel : claudeModel;
   const userEffort = active?.cli === "codex" ? codexEffort : claudeEffort;
-  const displayModel = userModel ?? active?.default_model ?? null;
-  const displayEffort = userEffort ?? active?.default_effort ?? null;
+  const displayModel = isAuto ? null : userModel ?? active?.default_model ?? null;
+  const displayEffort = isAuto ? null : userEffort ?? active?.default_effort ?? null;
 
   const grouped = ROLE_ORDER
     .map((role) => ({
@@ -87,16 +89,18 @@ export function LanePicker() {
     .filter((g) => g.items.length > 0);
 
   return (
-    <DropdownMenu>
+    <DropdownMenu modal={false}>
       <DropdownMenuTrigger asChild>
         <Button
           size="xs"
           variant="outline"
-          className="flex h-6 items-center gap-1 rounded-md border border-border/60 bg-card px-1.5 text-[10.5px] text-muted-foreground transition-colors hover:border-border hover:bg-accent hover:text-foreground"
-          title={`Lane: ${active?.label ?? "—"}`}
+          className="flex h-6 items-center gap-1 rounded-full border border-border/60 bg-card px-1.5 text-[10.5px] text-muted-foreground transition-colors hover:border-border hover:bg-accent hover:text-foreground"
+          title={`Lane: ${active?.label ?? "-"}`}
         >
           <HugeiconsIcon icon={ActiveIcon} size={11} strokeWidth={1.75} />
-          <span className="max-w-[5.5rem] truncate">{active?.label ?? "—"}</span>
+          <span className="max-w-[5.5rem] truncate">
+            {isAuto ? "Auto route" : active?.label ?? "-"}
+          </span>
           {displayModel ? (
             <span className="rounded-md border border-border/60 bg-muted/45 px-1 font-mono text-[9.5px] text-muted-foreground">
               {displayModel.replace(/^claude-/, "").replace(/(\d)-(\d)/g, "$1.$2")}
@@ -115,7 +119,7 @@ export function LanePicker() {
           />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="min-w-72 rounded-xl">
+      <DropdownMenuContent align="start" className="min-w-60 rounded-xl">
         <div className="px-2 pt-1.5 pb-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
           Routing
         </div>
@@ -157,9 +161,11 @@ export function LanePicker() {
                       ? "disabled"
                       : backendDown
                         ? "backend unavailable"
-                        : lane.default_model
-                          ? `${lane.default_model.replace(/^claude-/, "")} · ${COST_LABEL[lane.cost_tier] ?? lane.cost_tier}`
-                          : COST_LABEL[lane.cost_tier] ?? lane.cost_tier
+                        : lane.backend
+                          ? `LARPING ${lane.default_model?.replace(/^claude-/, "").replace(/(\d)-(\d)/g, "$1.$2") ?? "—"}`
+                          : lane.default_model
+                            ? `${lane.default_model.replace(/^claude-/, "").replace(/(\d)-(\d)/g, "$1.$2")} · ${COST_LABEL[lane.cost_tier] ?? lane.cost_tier}`
+                            : COST_LABEL[lane.cost_tier] ?? lane.cost_tier
                   }
                 />
               );
@@ -192,7 +198,7 @@ function LaneMenuItem({
   disabledHint?: string;
   description?: string;
 }) {
-  const Icon = ROLE_ICON[lane.role] ?? CodeIcon;
+  const Icon = lane.id === "auto" ? Route01Icon : ROLE_ICON[lane.role] ?? CodeIcon;
   const greyedOut = disabled && !active;
   return (
     <DropdownMenuItem

@@ -3,6 +3,9 @@ import {
   ArrowDown01Icon,
   ArrowRight01Icon,
   Delete01Icon,
+  FileImportIcon,
+  Refresh01Icon,
+  Task01Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import * as api from "@/lair/api";
@@ -63,18 +66,30 @@ export function QueuePanel({ onImportClick, onSendItem }: Props) {
 
   if (queue.length === 0) {
     return (
-      <div className="flex max-h-[44vh] shrink-0 flex-col items-center justify-center gap-3 border-b border-border/60 bg-card/40 px-4 py-10 text-center">
-        <p className="text-[12px] font-medium text-foreground/90">No queue yet</p>
-        <p className="text-[11px] text-muted-foreground">
-          Import a spec to build the queue.
-        </p>
-        <button
-          type="button"
-          onClick={onImportClick}
-          className="rounded-md bg-primary px-3 py-1.5 text-[11px] font-medium text-primary-foreground hover:bg-primary/90"
-        >
-          import spec
-        </button>
+      <div className="flex max-h-[44vh] shrink-0 flex-col border-b border-border/60 bg-card/40 px-4 py-6">
+        <div className="flex flex-col gap-3 rounded-xl border border-border/70 bg-background/45 px-3.5 py-4">
+          <div className="flex items-center gap-2">
+            <span className="flex size-8 shrink-0 items-center justify-center rounded-full border border-border/70 bg-card text-muted-foreground">
+              <HugeiconsIcon icon={Task01Icon} size={16} strokeWidth={1.75} />
+            </span>
+            <div className="min-w-0">
+              <p className="text-[12px] font-semibold tracking-tight text-foreground/90">
+                No implementation plan loaded
+              </p>
+              <p className="mt-0.5 text-[11px] leading-relaxed text-muted-foreground">
+                Import a Claude Code plan to turn tasks into a runnable queue.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onImportClick}
+            className="flex h-8 items-center justify-center gap-1.5 rounded-full bg-primary px-3 text-[11px] font-semibold text-primary-foreground transition-[background-color,transform] hover:bg-primary/90 active:scale-[0.98]"
+          >
+            <HugeiconsIcon icon={FileImportIcon} size={13} strokeWidth={1.75} />
+            Import plan
+          </button>
+        </div>
       </div>
     );
   }
@@ -104,16 +119,18 @@ export function QueuePanel({ onImportClick, onSendItem }: Props) {
     <div className="flex max-h-[44vh] shrink-0 flex-col border-b border-border/60 bg-card/40 text-[12px]">
       <div className="flex min-h-9 shrink-0 items-center justify-between gap-2 border-b border-border/50 px-2">
         <span className="min-w-0 truncate text-[11px] font-medium text-muted-foreground">
-          {currentItem ? `Now: ${currentItem.label}` : "Queue"}
+          {currentItem ? `Current task: ${currentItem.label}` : "Implementation plan"}
         </span>
         <div className="flex shrink-0 items-center gap-1">
           {currentItem ? (
             <button
               type="button"
               onClick={() => onSendItem(currentItem)}
-              className="rounded px-1.5 py-0.5 text-[10px] text-muted-foreground hover:bg-muted hover:text-foreground"
+              className="flex h-6 items-center gap-1 rounded-full px-2 text-[10px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              title="Run the current task again"
             >
-              restart
+              <HugeiconsIcon icon={Refresh01Icon} size={11} strokeWidth={1.75} />
+              Run current again
             </button>
           ) : null}
           {cursor.pinned ? (
@@ -131,9 +148,10 @@ export function QueuePanel({ onImportClick, onSendItem }: Props) {
           <button
             type="button"
             onClick={onImportClick}
-            className="rounded-md bg-primary px-2 py-1 text-[11px] font-medium text-primary-foreground"
+            className="flex h-7 items-center gap-1.5 rounded-full bg-primary px-2.5 text-[11px] font-semibold text-primary-foreground transition-[background-color,transform] hover:bg-primary/90 active:scale-[0.98]"
           >
-            import
+            <HugeiconsIcon icon={FileImportIcon} size={12} strokeWidth={1.75} />
+            Import plan
           </button>
         </div>
       </div>

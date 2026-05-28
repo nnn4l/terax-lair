@@ -7,13 +7,36 @@ use uuid::Uuid;
 
 pub fn list_specs(workspace: &str) -> Result<Vec<String>, String> {
     let root = workspace.trim_end_matches(['/', '\\']);
-    let pattern = format!("{root}/docs/**/*.md");
-    let mut paths = glob::glob(&pattern)
-        .map_err(|e| format!("glob pattern error: {e}"))?
-        .filter_map(Result::ok)
-        .map(|path| path.to_string_lossy().replace('\\', "/"))
-        .collect::<Vec<_>>();
+    let patterns = [
+        format!("{root}/docs/superpowers/plans/**/*.md"),
+        format!("{root}/docs/plans/**/*.md"),
+        format!("{root}/docs/**/*plan*.md"),
+        format!("{root}/docs/**/*.md"),
+    ];
+    let mut paths = Vec::new();
+    for pattern in patterns {
+        for path in glob::glob(&pattern)
+            .map_err(|e| format!("glob pattern error: {e}"))?
+            .filter_map(Result::ok)
+        {
+            let path = path.to_string_lossy().replace('\\', "/");
+            if !paths.contains(&path) {
+                paths.push(path);
+            }
+        }
+    }
     paths.sort();
+    paths.sort_by_key(|path| {
+        if path.contains("/docs/superpowers/plans/") {
+            0
+        } else if path.contains("/docs/plans/") {
+            1
+        } else if path.to_lowercase().contains("plan") {
+            2
+        } else {
+            3
+        }
+    });
     Ok(paths)
 }
 

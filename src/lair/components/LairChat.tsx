@@ -19,21 +19,23 @@ import { Card } from "@/lair/components/Card";
 import { CritiqueTray } from "@/lair/components/CritiqueTray";
 import { NarrationLine } from "@/lair/components/NarrationLine";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { ApprovalGateCard } from "@/lair/components/ApprovalGateCard";
 import { PillarCheckCard } from "@/lair/components/PillarCheckCard";
 import { StaleSpecCard } from "@/lair/components/StaleSpecCard";
 import {
   Add01Icon,
+  ArrowDown01Icon,
   Cancel01Icon,
   CopyIcon,
   PencilEdit02Icon,
   Refresh01Icon,
+  Tick02Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import type {
@@ -425,7 +427,7 @@ export function LairChat({ onClose }: { onClose?: () => void }) {
             onChange={(event) => setText(event.target.value)}
             placeholder={
               currentItem
-                ? `${currentItem.label} — Message Lair...`
+                ? `${currentItem.label} - Message Lair...`
                 : workspace
                   ? "Message Lair..."
                   : "set workspace first"
@@ -482,29 +484,67 @@ function SessionPicker({
   const sorted = [...sessions].sort((a, b) => b.updatedAt - a.updatedAt);
   return (
     <div className="flex min-w-0 items-center gap-1">
-      <Select
-        value={activeSessionId ?? ""}
-        onValueChange={(value) => onSwitch(value)}
-      >
-        <SelectTrigger
-          size="sm"
-          className="h-6 w-auto max-w-[10rem] gap-1 rounded-md border border-transparent bg-transparent px-1.5 py-0 text-[10.5px] text-muted-foreground hover:border-border/60 hover:bg-background/50 hover:text-foreground [&>svg]:size-3"
-          title="Switch Lair chat"
-        >
-          <SelectValue placeholder={activeTitle} />
-        </SelectTrigger>
-        <SelectContent className="rounded-md">
-          {sorted.map((session) => (
-            <SelectItem key={session.id} value={session.id} className="rounded-sm py-1 pr-6 pl-2 text-[11px]">
-              {session.title || "New chat"}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button
+            type="button"
+            className="flex h-6 max-w-[11rem] items-center gap-1 rounded-full border border-border/60 bg-card px-1.5 text-[10.5px] text-muted-foreground transition-colors hover:border-border hover:bg-accent hover:text-foreground"
+            title="Switch Lair chat"
+          >
+            <span className="min-w-0 truncate">{activeTitle || "New chat"}</span>
+            <HugeiconsIcon icon={ArrowDown01Icon} size={10} strokeWidth={2} />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start" className="min-w-64 rounded-xl">
+          <div className="px-2 pt-1.5 pb-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+            Chats
+          </div>
+          {sorted.length === 0 ? (
+            <div className="px-2 py-2 text-[11px] text-muted-foreground">
+              No chats yet
+            </div>
+          ) : (
+            sorted.map((session) => (
+              <DropdownMenuItem
+                key={session.id}
+                onSelect={() => onSwitch(session.id)}
+                className={`flex items-start gap-2 pr-2 text-[12px] ${
+                  activeSessionId === session.id ? "bg-accent/40" : ""
+                }`}
+              >
+                <span className="flex min-w-0 flex-1 flex-col">
+                  <span className="truncate text-foreground/90">
+                    {session.title || "New chat"}
+                  </span>
+                  <span className="text-[10.5px] text-muted-foreground">
+                    Lair conversation
+                  </span>
+                </span>
+                {activeSessionId === session.id ? (
+                  <HugeiconsIcon
+                    icon={Tick02Icon}
+                    size={12}
+                    strokeWidth={2}
+                    className="mt-0.5 shrink-0 text-foreground"
+                  />
+                ) : null}
+              </DropdownMenuItem>
+            ))
+          )}
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
+            onSelect={onNew}
+            className="flex items-center gap-2 text-[12px]"
+          >
+            <HugeiconsIcon icon={Add01Icon} size={13} strokeWidth={1.75} />
+            <span>New chat</span>
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
       <button
         type="button"
         onClick={onNew}
-        className="flex size-5 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+        className="flex size-6 items-center justify-center rounded-full border border-border/60 bg-card text-muted-foreground transition-colors hover:border-border hover:bg-accent hover:text-foreground"
         title="New chat"
         aria-label="New Lair chat"
       >
@@ -514,11 +554,11 @@ function SessionPicker({
         <button
           type="button"
           onClick={() => onDelete(activeSessionId)}
-          className="flex size-5 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+          className="flex size-6 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
           title="Delete chat"
           aria-label="Delete Lair chat"
         >
-          <HugeiconsIcon icon={Cancel01Icon} size={10} strokeWidth={1.75} />
+          <HugeiconsIcon icon={Cancel01Icon} size={11} strokeWidth={1.75} />
         </button>
       ) : null}
     </div>
@@ -563,16 +603,16 @@ function EmptyState({ onPick }: { onPick: (text: string) => void }) {
               : "Open a workspace to get started."}
         </p>
       </div>
-      <div className="flex w-full flex-col gap-1.5">
+      <div className="flex w-full flex-col gap-2">
         {suggestions.map((s) => (
           <button
             key={s.label}
             type="button"
             onClick={() => onPick(s.prompt)}
-            className="rounded-lg border border-border/75 bg-background/70 px-3 py-2 text-left text-[12px] font-medium text-foreground transition-[background-color,border-color,transform] duration-200 hover:border-border hover:bg-muted/55 active:translate-y-px"
+            className="rounded-lg border border-border/75 bg-background/70 px-4 py-2.5 text-left text-[12px] font-medium text-foreground transition-[background-color,border-color,transform] duration-200 hover:border-border hover:bg-muted/55 active:translate-y-px"
           >
             <span className="block">{s.label}</span>
-            <span className="mt-0.5 block text-[11px] font-normal text-muted-foreground">
+            <span className="mt-1 block text-[11px] font-normal text-muted-foreground">
               {s.prompt}
             </span>
           </button>
@@ -605,11 +645,7 @@ export function TurnView({
     .filter((n): n is NarrationData => Boolean(n));
 
   return (
-    <div data-lair-turn="timeline" className="group/turn relative flex flex-col gap-2.5 pl-3">
-      <div
-        aria-hidden
-        className="absolute bottom-1.5 left-0 top-1.5 w-px bg-gradient-to-b from-primary/35 via-border/60 to-border/20"
-      />
+    <div data-lair-turn="timeline" className="group/turn relative flex flex-col gap-2.5">
       <div data-lair-role="user" className="flex flex-col items-end gap-1">
         <PhaseLabel phase="prompt" align="right">
           prompt

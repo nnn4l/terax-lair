@@ -136,6 +136,14 @@ function migratePersistedState(persistedState: unknown): unknown {
   return obj;
 }
 
+function reconcileActiveLaneId(lanes: Lane[], activeLaneId: string): string {
+  if (activeLaneId === "auto") return activeLaneId;
+  if (lanes.some((lane) => lane.id === activeLaneId && lane.enabled)) {
+    return activeLaneId;
+  }
+  return lanes.find((lane) => lane.enabled)?.id ?? "auto";
+}
+
 export async function loadLanesIntoStore() {
   const { listLanes } = await import("@/lair/api");
   const lanes = await listLanes();
@@ -314,7 +322,11 @@ export const useLair = create<LairState>()(
       setCritiqueTrayOpen: (critiqueTrayOpen) => set({ critiqueTrayOpen }),
       setPillarCheckPending: (pillarCheckPending) =>
         set({ pillarCheckPending }),
-      setLanes: (lanes) => set({ lanes }),
+      setLanes: (lanes) =>
+        set((state) => ({
+          lanes,
+          activeLaneId: reconcileActiveLaneId(lanes, state.activeLaneId),
+        })),
       setLaneStatus: (status) =>
         set((s) => ({
           laneStatuses: { ...s.laneStatuses, [status.lane_id]: status },

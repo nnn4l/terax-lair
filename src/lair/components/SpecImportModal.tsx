@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import * as api from "@/lair/api";
 import { useLair } from "@/lair/state";
 import type { QueueItem } from "@/lair/types";
+import { resolvePlanImportPath } from "@/lair/components/planImportPath";
 
 interface Props {
   open: boolean;
@@ -10,10 +11,11 @@ interface Props {
 }
 
 export function SpecImportModal({ open, onClose, workspace }: Props) {
-  const [tab, setTab] = useState<"file" | "paste">("file");
+  const [tab, setTab] = useState<"file" | "path" | "paste">("file");
   const [specList, setSpecList] = useState<string[]>([]);
   const [loadingSpecs, setLoadingSpecs] = useState(false);
   const [selected, setSelected] = useState("");
+  const [pathInput, setPathInput] = useState("");
   const [pasted, setPasted] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -38,13 +40,20 @@ export function SpecImportModal({ open, onClose, workspace }: Props) {
       let items: QueueItem[];
       if (tab === "file") {
         if (!selected) {
-          setError("Select a file.");
+          setError("Select an implementation plan.");
           return;
         }
         items = await api.importSpec(workspace, selected);
+      } else if (tab === "path") {
+        const resolved = resolvePlanImportPath(pathInput, workspace);
+        if (!resolved) {
+          setError("Enter a plan file path.");
+          return;
+        }
+        items = await api.importSpec(workspace, resolved);
       } else {
         if (!pasted.trim()) {
-          setError("Paste spec content.");
+          setError("Paste implementation plan content.");
           return;
         }
         items = await api.pasteSpec(workspace, pasted);
@@ -62,14 +71,30 @@ export function SpecImportModal({ open, onClose, workspace }: Props) {
   if (!open) return null;
 
   const canImport =
-    !loading && (tab === "file" ? selected.length > 0 : pasted.trim().length > 0);
+    !loading &&
+    (tab === "file"
+      ? selected.length > 0
+      : tab === "path"
+        ? pathInput.trim().length > 0
+        : pasted.trim().length > 0);
   const selectedLabel = selected.replace(/\\/g, "/").split("/").slice(-2).join("/");
+  const loadingLabel =
+    tab === "file" && selectedLabel
+      ? `Building queue from ${selectedLabel}...`
+      : tab === "path" && pathInput.trim()
+        ? "Building queue from plan file..."
+        : "Building queue from pasted plan...";
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/75 p-4">
-      <div className="flex max-h-[80vh] w-[min(34rem,100%)] flex-col overflow-hidden rounded-lg border border-border bg-card shadow-xl">
-        <div className="flex min-h-11 items-center justify-between border-b border-border px-4">
-          <h2 className="text-[13px] font-semibold">Import spec</h2>
+      <div className="flex max-h-[80vh] w-[min(36rem,100%)] flex-col overflow-hidden rounded-xl border border-border bg-card shadow-xl">
+        <div className="flex min-h-12 items-center justify-between border-b border-border px-4">
+          <div>
+            <h2 className="text-[13px] font-semibold">Import implementation plan</h2>
+            <p className="text-[11px] text-muted-foreground">
+              Load a Claude Code task plan into the queue.
+            </p>
+          </div>
           <button
             type="button"
             disabled={loading}
@@ -79,20 +104,27 @@ export function SpecImportModal({ open, onClose, workspace }: Props) {
             close
           </button>
         </div>
-        <div className="grid grid-cols-2 border-b border-border text-[12px]">
+        <div className="grid grid-cols-3 border-b border-border text-[12px]">
           <button
             type="button"
             onClick={() => setTab("file")}
             className={tab === "file" ? "bg-muted py-2 font-medium" : "py-2 text-muted-foreground"}
           >
-            from repo
+            plans
+          </button>
+          <button
+            type="button"
+            onClick={() => setTab("path")}
+            className={tab === "path" ? "bg-muted py-2 font-medium" : "py-2 text-muted-foreground"}
+          >
+            file path
           </button>
           <button
             type="button"
             onClick={() => setTab("paste")}
             className={tab === "paste" ? "bg-muted py-2 font-medium" : "py-2 text-muted-foreground"}
           >
-            paste
+            paste plan
           </button>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto p-4">
@@ -105,7 +137,7 @@ export function SpecImportModal({ open, onClose, workspace }: Props) {
               </div>
             ) : specList.length === 0 ? (
               <p className="text-[12px] text-muted-foreground">
-                No markdown files found under docs.
+                No markdown plans found under docs.
               </p>
             ) : (
               <div className="space-y-1">
@@ -124,22 +156,31 @@ export function SpecImportModal({ open, onClose, workspace }: Props) {
                 ))}
               </div>
             )
+          ) : tab === "path" ? (
+            <div className="space-y-2">
+              <input
+                autoFocus
+                value={pathInput}
+                onChange={(event) => setPathInput(event.target.value)}
+                placeholder="docs/superpowers/plans/implementation.md"
+                className="h-9 w-full rounded-md border border-border bg-background px-3 text-[12px] outline-none focus:ring-1 focus:ring-ring"
+              />
+              <p className="text-[11px] leading-relaxed text-muted-foreground">
+                Use an absolute path or a path relative to the current workspace.
+              </p>
+            </div>
           ) : (
             <textarea
               value={pasted}
               onChange={(event) => setPasted(event.target.value)}
-              placeholder="Paste spec markdown here..."
+              placeholder="Paste implementation plan markdown here..."
               className="h-56 w-full resize-none rounded-md border border-border bg-background p-2 text-[12px] outline-none focus:ring-1 focus:ring-ring"
             />
           )}
           {loading ? (
             <div className="mt-3 flex items-center gap-2 rounded-md border border-border bg-muted/35 px-3 py-2 text-[12px] text-muted-foreground">
               <span className="size-3 animate-spin rounded-full border border-muted-foreground/30 border-t-foreground" />
-              <span>
-                {tab === "file" && selectedLabel
-                  ? `Building queue from ${selectedLabel}...`
-                  : "Building queue from pasted spec..."}
-              </span>
+              <span>{loadingLabel}</span>
             </div>
           ) : tab === "file" && selected ? (
             <p className="mt-2 text-[11px] text-muted-foreground">
@@ -169,7 +210,7 @@ export function SpecImportModal({ open, onClose, workspace }: Props) {
                 importing
               </>
             ) : (
-              "import"
+              "import plan"
             )}
           </button>
         </div>

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, test } from "vitest";
 import { useLair } from "@/lair/state";
-import type { CardData } from "@/lair/types";
+import type { CardData, Lane } from "@/lair/types";
 
 const card: CardData = {
   id: "card-1",
@@ -15,6 +15,22 @@ const card: CardData = {
   effort: null,
 };
 
+const lane = (id: string, enabled: boolean): Lane => ({
+  id,
+  label: id,
+  cli: id === "codex" ? "codex" : "claude",
+  env: {},
+  default_model: null,
+  default_effort: null,
+  role: "implementor",
+  cost_tier: "standard",
+  clear_required: false,
+  backend: null,
+  auto_bias: [],
+  enabled,
+  context_window: null,
+});
+
 describe("lair state", () => {
   beforeEach(() => {
     useLair.setState({
@@ -27,6 +43,8 @@ describe("lair state", () => {
       workspace: "",
       phase: "implement",
       agentChoice: "codex",
+      lanes: [],
+      activeLaneId: "claude",
     });
   });
 
@@ -79,5 +97,17 @@ describe("lair state", () => {
     expect(useLair.getState().turns.map((t) => t.prompt)).toEqual([
       "second turn",
     ]);
+  });
+
+  test("lane reload keeps active lane selectable", () => {
+    useLair.getState().setActiveLaneId("deepseek-pro");
+
+    useLair.getState().setLanes([
+      lane("claude", true),
+      lane("deepseek-pro", false),
+      lane("deepseek-flash", true),
+    ]);
+
+    expect(useLair.getState().activeLaneId).toBe("claude");
   });
 });

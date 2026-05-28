@@ -13,10 +13,10 @@ describe("LairChat components", () => {
     expect(html).toContain('data-slot="dropdown-menu-trigger"');
   });
 
-  test("phase picker renders every Lair phase", () => {
+  test("phase picker uses the router-style dropdown trigger", () => {
     const html = renderToStaticMarkup(<PhaseDropdown />);
-    expect(html).toContain('role="combobox"');
-    expect(html).toContain('data-slot="select-trigger"');
+    expect(html).toContain('data-slot="dropdown-menu-trigger"');
+    expect(html).toContain("Implement");
     expect(html).not.toContain("<option");
   });
 

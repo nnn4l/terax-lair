@@ -7,8 +7,7 @@ use crate::lair::doc_watcher::WatcherHandle;
 use crate::lair::keychain::get_openrouter_key;
 use crate::lair::narrator::{narrate, NarrationTrigger};
 use crate::lair::parser_client::{
-    judge_outcome, list_models, summarize_output, ModelInfo, RouteRequest, RouteResult,
-    SummarizeRequest,
+    judge_outcome, list_models, summarize_output, ModelInfo, SummarizeRequest,
 };
 use crate::lair::phase_prompts::system_prompt_for;
 use crate::lair::pillars;
@@ -69,13 +68,9 @@ pub async fn lair_send_message(
     let config = config.inner().clone();
     let lair_state = lair_state.inner().clone();
     let mut ids = Vec::new();
-    let agent = if req.use_auto {
-        Agent::Codex // legacy: auto routes later, use Codex as default
-    } else if req.lane_id == "codex" {
-        Agent::Codex
-    } else {
-        Agent::Claude
-    };
+    let lane = resolve_lane_for_request(&config, &lair_state, &req).await?;
+    ensure_lane_backend_running(&lane)?;
+    let agent = agent_for_lane(&lane);
     match agent {
         Agent::Claude => {
             emit_narration_background(
@@ -83,7 +78,7 @@ pub async fn lair_send_message(
                 &config,
                 NarrationTrigger::Dispatching { agent: Agent::Claude },
             );
-            ids.push(spawn(app, config, lair_state, Agent::Claude, &req).await?);
+            ids.push(spawn(app, config, lair_state, lane, Agent::Claude, &req).await?);
         }
         Agent::Codex => {
             emit_narration_background(
@@ -91,7 +86,7 @@ pub async fn lair_send_message(
                 &config,
                 NarrationTrigger::Dispatching { agent: Agent::Codex },
             );
-            ids.push(spawn(app, config, lair_state, Agent::Codex, &req).await?);
+            ids.push(spawn(app, config, lair_state, lane, Agent::Codex, &req).await?);
         }
     }
     Ok(ids)
@@ -120,12 +115,13 @@ async fn spawn(
     app: AppHandle,
     config: Arc<LairConfig>,
     lair_state: Arc<LairState>,
+    lane: Lane,
     agent: Agent,
     req: &SendMessageRequest,
 ) -> Result<String, String> {
     let id = Uuid::new_v4().to_string();
-    let model = model_for(&agent, req);
-    let effort = effort_for(&agent, req);
+    let model = model_for_lane(&lane, req);
+    let effort = effort_for_lane(&lane, req);
     let phase_prompt = system_prompt_for(&req.phase, &agent);
     let pillars = read_pillars_cached(&lair_state, &req.workspace);
     let system_prompt = if pillars.trim().is_empty() {
@@ -179,7 +175,7 @@ async fn spawn(
 
     let exit = run_agent_streaming(
         AgentSpawnRequest {
-            lane: lane_from_agent(&agent),
+            lane,
             prompt: effective_prompt,
             system_prompt,
             model_override: model.clone(),
@@ -679,20 +675,6 @@ pub fn lair_queue_resync(
 
 // ---- helpers ----
 
-fn model_for(agent: &Agent, req: &SendMessageRequest) -> Option<String> {
-    match agent {
-        Agent::Claude => req.claude_model.clone(),
-        Agent::Codex => req.codex_model.clone(),
-    }
-}
-
-fn effort_for(agent: &Agent, req: &SendMessageRequest) -> Option<String> {
-    match agent {
-        Agent::Claude => req.claude_effort.clone(),
-        Agent::Codex => req.codex_effort.clone(),
-    }
-}
-
 fn agent_key(agent: &Agent) -> String {
     match agent {
         Agent::Claude => "claude",
@@ -701,32 +683,76 @@ fn agent_key(agent: &Agent) -> String {
     .to_string()
 }
 
-fn lane_from_agent(agent: &Agent) -> Lane {
-    use std::collections::HashMap;
-    Lane {
-        id: match agent {
-            Agent::Claude => "claude".into(),
-            Agent::Codex => "codex".into(),
-        },
-        label: match agent {
-            Agent::Claude => "Claude".into(),
-            Agent::Codex => "Codex".into(),
-        },
-        cli: match agent {
-            Agent::Claude => "claude".into(),
-            Agent::Codex => "codex".into(),
-        },
-        env: HashMap::new(),
-        default_model: None,
-        default_effort: None,
-        role: LaneRole::Implementor,
-        cost_tier: CostTier::Standard,
-        clear_required: false,
-        backend: None,
-        auto_bias: vec![],
-        enabled: true,
-        context_window: None,
+fn agent_for_lane(lane: &Lane) -> Agent {
+    if lane.cli == "codex" {
+        Agent::Codex
+    } else {
+        Agent::Claude
     }
+}
+
+fn model_for_lane(lane: &Lane, req: &SendMessageRequest) -> Option<String> {
+    let override_model = if lane.cli == "codex" {
+        req.codex_model.clone()
+    } else {
+        req.claude_model.clone()
+    };
+    override_model.or_else(|| lane.default_model.clone())
+}
+
+fn effort_for_lane(lane: &Lane, req: &SendMessageRequest) -> Option<String> {
+    let override_effort = if lane.cli == "codex" {
+        req.codex_effort.clone()
+    } else {
+        req.claude_effort.clone()
+    };
+    override_effort.or_else(|| lane.default_effort.clone())
+}
+
+async fn resolve_lane_for_request(
+    config: &Arc<LairConfig>,
+    state: &Arc<LairState>,
+    req: &SendMessageRequest,
+) -> Result<Lane, String> {
+    let lanes = ensure_lanes_loaded(state)?;
+    if req.use_auto || req.lane_id == "auto" {
+        let api_key = get_openrouter_key().unwrap_or_default();
+        let route = crate::lair::auto_router::route_lane(crate::lair::auto_router::RouteRequest {
+            lanes: lanes.clone(),
+            prompt: req.prompt.clone(),
+            phase: req.phase.clone(),
+            agent_hint: None,
+            api_key,
+            model: config.openrouter_model.clone(),
+        })
+        .await?;
+        return lanes
+            .into_iter()
+            .find(|lane| lane.id == route.lane_id && lane.enabled)
+            .ok_or_else(|| format!("auto selected unavailable lane: {}", route.lane_id));
+    }
+
+    let lane = lanes
+        .into_iter()
+        .find(|lane| lane.id == req.lane_id)
+        .ok_or_else(|| format!("unknown lane: {}", req.lane_id))?;
+    if !lane.enabled {
+        return Err(format!("lane disabled: {}", lane.label));
+    }
+    Ok(lane)
+}
+
+fn ensure_lane_backend_running(lane: &Lane) -> Result<(), String> {
+    let Some(backend_id) = lane.backend.as_deref() else {
+        return Ok(());
+    };
+    if matches!(
+        crate::lair::backend_manager::BACKEND_MANAGER.status(backend_id),
+        BackendStatus::Running
+    ) {
+        return Ok(());
+    }
+    crate::lair::backend_manager::BACKEND_MANAGER.restart(backend_id)
 }
 
 fn phase_key(phase: &Phase) -> String {
@@ -736,14 +762,6 @@ fn phase_key(phase: &Phase) -> String {
         Phase::Test => "test",
         Phase::Critique => "critique",
         Phase::Review => "review",
-    }
-    .to_string()
-}
-
-fn fallback_agent_for_phase(phase: &Phase) -> String {
-    match phase {
-        Phase::Implement | Phase::Refactor | Phase::Test | Phase::Critique => "codex",
-        Phase::Review => "claude",
     }
     .to_string()
 }
@@ -803,12 +821,10 @@ async fn dispatch_one(
     lair_state: Arc<LairState>,
     req: SendMessageRequest,
 ) -> Result<(), String> {
-    let agent = if req.use_auto || req.lane_id == "codex" {
-        Agent::Codex
-    } else {
-        Agent::Claude
-    };
-    let _ = spawn(app, config, lair_state, agent, &req).await?;
+    let lane = resolve_lane_for_request(&config, &lair_state, &req).await?;
+    ensure_lane_backend_running(&lane)?;
+    let agent = agent_for_lane(&lane);
+    let _ = spawn(app, config, lair_state, lane, agent, &req).await?;
     Ok(())
 }
 
