@@ -73,8 +73,6 @@ export function LairChat({ onClose }: { onClose?: () => void }) {
   const staleSpecFile = useLair((s) => s.staleSpecFile);
   const pendingGate = useLair((s) => s.pendingGate);
   const pillarCheckPending = useLair((s) => s.pillarCheckPending);
-  const critiqueDraftCount = useLair((s) => s.critiqueDrafts.length);
-  const critiqueTrayOpen = useLair((s) => s.critiqueTrayOpen);
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<{ message: string; prompt: string } | null>(null);
@@ -313,19 +311,8 @@ export function LairChat({ onClose }: { onClose?: () => void }) {
         aria-hidden
         className="pointer-events-none absolute inset-x-0 top-0 h-40 bg-[radial-gradient(circle_at_50%_-18%,var(--accent),transparent_46%)] opacity-70"
       />
-      <div className="relative flex h-12 shrink-0 items-center justify-between gap-2 border-b border-border/70 bg-card/85 px-3">
+      <div className="relative flex h-12 shrink-0 items-center justify-between gap-2 px-3">
         <div className="flex min-w-0 items-center gap-2.5">
-          <div className="flex size-6 shrink-0 items-center justify-center rounded-lg border border-border/70 bg-background/60 shadow-[inset_0_1px_0_color-mix(in_oklch,var(--foreground)_8%,transparent)]">
-            <span className="size-1.5 rounded-full bg-primary shadow-[0_0_14px_color-mix(in_oklch,var(--primary)_45%,transparent)]" />
-          </div>
-          <div className="flex min-w-0 flex-col">
-            <span className="shrink-0 text-[12px] font-semibold leading-none tracking-tight">
-              Lair
-            </span>
-            <span className="mt-0.5 truncate text-[10px] leading-none text-muted-foreground">
-              agent console
-            </span>
-          </div>
           <SessionPicker
             sessions={sessions}
             activeSessionId={activeSessionId}
@@ -354,7 +341,7 @@ export function LairChat({ onClose }: { onClose?: () => void }) {
       </div>
 
       {currentItem ? (
-        <div className="relative flex min-h-9 shrink-0 items-center gap-2 border-b border-border/60 bg-muted/25 px-3 text-[11px]">
+        <div className="relative flex min-h-9 shrink-0 items-center gap-2 px-3 text-[11px]">
           <span className="shrink-0 rounded bg-background/70 px-1.5 py-0.5 font-mono text-[9.5px] uppercase tracking-wide text-muted-foreground">
             now
           </span>
@@ -424,25 +411,24 @@ export function LairChat({ onClose }: { onClose?: () => void }) {
         )}
       </div>
 
-      <div className="border-t border-border/70 bg-card/90 px-3 pt-2.5 pb-3">
+      <div className="px-3 pt-2.5 pb-3">
         <div
           data-lair-composer="command-surface"
-          className="relative rounded-lg border border-border/80 bg-background/80 shadow-[0_1px_0_color-mix(in_oklch,var(--foreground)_7%,transparent)_inset] transition-[border-color,box-shadow] duration-200 focus-within:border-ring/70 focus-within:shadow-[0_0_0_3px_color-mix(in_oklch,var(--ring)_18%,transparent)]"
+          className="relative rounded-xl border border-border/70 bg-background/65 shadow-[inset_0_1px_0_color-mix(in_oklch,var(--foreground)_6%,transparent)] transition-[border-color,box-shadow] duration-200 focus-within:border-ring/70"
         >
-          <div className="flex h-7 items-center gap-1.5 border-b border-border/45 px-3 text-[10.5px] text-muted-foreground">
-            <span className="font-mono uppercase tracking-wide">command</span>
-            <span className="text-muted-foreground/45">/</span>
-            <span className="min-w-0 truncate">
-              {currentItem ? currentItem.label : workspace ? "workspace ready" : "set workspace first"}
-            </span>
-          </div>
           <textarea
             ref={composerRef}
             aria-label="Message Lair"
-            className="block min-h-28 w-full resize-none rounded-lg bg-transparent px-3 py-2.5 pb-11 text-[13px] leading-relaxed outline-none placeholder:text-muted-foreground/70"
+            className="block min-h-28 w-full resize-none rounded-xl bg-transparent px-3 py-2.5 pb-11 text-[13px] leading-relaxed outline-none placeholder:text-muted-foreground/60"
             value={text}
             onChange={(event) => setText(event.target.value)}
-            placeholder="Message Lair..."
+            placeholder={
+              currentItem
+                ? `${currentItem.label} — Message Lair...`
+                : workspace
+                  ? "Message Lair..."
+                  : "set workspace first"
+            }
             onKeyDown={(event) => {
               if (event.key === "Enter" && !event.shiftKey) {
                 event.preventDefault();
@@ -455,20 +441,6 @@ export function LairChat({ onClose }: { onClose?: () => void }) {
               <LanePicker />
             </div>
             <div className="pointer-events-auto flex items-center gap-1.5">
-              <button
-                type="button"
-                onClick={() => useLair.getState().toggleCritiqueTray()}
-                className="flex h-6 items-center gap-1.5 rounded-md border border-border/60 bg-muted/70 px-2 text-[11px] font-medium text-muted-foreground transition-[background-color,color,transform] duration-200 hover:bg-muted hover:text-foreground active:translate-y-px"
-                title="Critique tray"
-                aria-label="Toggle critique tray"
-              >
-                <span>{critiqueTrayOpen ? "hide" : "critique"}</span>
-                {critiqueDraftCount > 0 ? (
-                  <span className="rounded bg-background/70 px-1 text-[10px]">
-                    {critiqueDraftCount}
-                  </span>
-                ) : null}
-              </button>
               <button
                 type="button"
                 className="flex h-6 items-center gap-1.5 rounded-md bg-primary px-2.5 text-[11px] font-semibold text-primary-foreground transition-[opacity,transform] duration-200 active:translate-y-px disabled:opacity-40"
