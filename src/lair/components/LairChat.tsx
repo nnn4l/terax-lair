@@ -309,10 +309,6 @@ export function LairChat({ onClose }: { onClose?: () => void }) {
       data-lair-surface="graphite-console"
       className="relative flex h-full min-h-0 flex-col overflow-hidden bg-card text-[12px] text-card-foreground"
     >
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-x-0 top-0 h-40 bg-[radial-gradient(circle_at_50%_-18%,var(--accent),transparent_46%)] opacity-70"
-      />
       <div className="relative flex h-12 shrink-0 items-center justify-between gap-2 border-b border-border/70 bg-card/85 px-3">
         <div className="flex min-w-0 items-center gap-2.5">
           <div className="flex size-6 shrink-0 items-center justify-center rounded-lg border border-border/70 bg-background/60 shadow-[inset_0_1px_0_color-mix(in_oklch,var(--foreground)_8%,transparent)]">

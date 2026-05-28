@@ -10,7 +10,7 @@ import type { CardData } from "@/lair/types";
 describe("LairChat components", () => {
   test("lane picker renders a Select trigger", () => {
     const html = renderToStaticMarkup(<LanePicker />);
-    expect(html).toContain('data-slot="select-trigger"');
+    expect(html).toContain('data-slot="dropdown-menu-trigger"');
   });
 
   test("phase picker renders every Lair phase", () => {
@@ -20,10 +20,9 @@ describe("LairChat components", () => {
     expect(html).not.toContain("<option");
   });
 
-  test("lair chat includes the graphite top glow", () => {
+  test("lair chat wraps in graphite console surface", () => {
     const html = renderToStaticMarkup(<LairChat />);
     expect(html).toContain("data-lair-surface=\"graphite-console\"");
-    expect(html).toContain("bg-[radial-gradient");
   });
 
   test("lair chat renders a chat thread with composer affordances", () => {
@@ -117,7 +116,7 @@ describe("LairChat components", () => {
       activeLaneId: "claude",
     });
     const html = renderToStaticMarkup(<LanePicker />);
-    expect(html).toContain('data-slot="select-trigger"');
+    expect(html).toContain('data-slot="dropdown-menu-trigger"');
   });
 
   test("card renders raw output when summary is unavailable", () => {

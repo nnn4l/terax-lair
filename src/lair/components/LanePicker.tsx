@@ -1,12 +1,20 @@
 import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectLabel,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+  ArrowDown01Icon,
+  ClaudeIcon,
+  CodeIcon,
+  SparklesIcon,
+  Tick02Icon,
+} from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { cn } from "@/lib/utils";
 import { useLair } from "@/lair/state";
 import type { Lane, LaneRole } from "@/lair/types";
 
@@ -15,6 +23,11 @@ const ROLE_LABEL: Record<LaneRole, string> = {
   implementor: "Implementor",
   reviewer: "Reviewer",
   consultant: "Consultant",
+};
+const ROLE_ICON: Record<LaneRole, typeof CodeIcon> = {
+  implementor: CodeIcon,
+  reviewer: SparklesIcon,
+  consultant: ClaudeIcon,
 };
 
 const COST_LABEL: Record<string, string> = {
@@ -47,6 +60,12 @@ export function LanePicker() {
     context_window: null,
   };
 
+  const active =
+    enabledLanes.find((l) => l.id === activeLaneId) ??
+    (activeLaneId === "auto" ? autoLane : null) ??
+    enabledLanes[0];
+  const ActiveIcon = active ? ROLE_ICON[active.role] : CodeIcon;
+
   const grouped = ROLE_ORDER
     .map((role) => ({
       role,
@@ -55,54 +74,124 @@ export function LanePicker() {
     .filter((g) => g.items.length > 0);
 
   return (
-    <Select value={activeLaneId} onValueChange={setActiveLaneId}>
-      <SelectTrigger className="h-7 w-auto gap-1.5 border border-border bg-card px-2 text-[11.5px]">
-        <SelectValue placeholder="lane" />
-      </SelectTrigger>
-      <SelectContent>
-        <SelectGroup>
-          <SelectItem value={autoLane.id} className="text-[12px]">
-            <span className="font-medium">Auto</span>
-            <span className="ml-2 text-[10px] text-muted-foreground">
-              routes implementors
-            </span>
-          </SelectItem>
-        </SelectGroup>
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          size="xs"
+          variant="outline"
+          className="flex h-6 items-center gap-1 rounded-md border border-border/60 bg-card px-1.5 text-[10.5px] text-muted-foreground transition-colors hover:border-border hover:bg-accent hover:text-foreground"
+          title={`Lane: ${active?.label ?? "—"}`}
+        >
+          <HugeiconsIcon icon={ActiveIcon} size={11} strokeWidth={1.75} />
+          <span className="max-w-[5.5rem] truncate">{active?.label ?? "—"}</span>
+          <HugeiconsIcon
+            icon={ArrowDown01Icon}
+            size={10}
+            strokeWidth={2}
+            className="opacity-70"
+          />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="min-w-72 rounded-xl">
+        <div className="px-2 pt-1.5 pb-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+          Routing
+        </div>
+        <LaneMenuItem
+          lane={autoLane}
+          active={activeLaneId === "auto"}
+          onSelect={() => setActiveLaneId("auto")}
+          description="Route to best implementor for the task"
+        />
+        <DropdownMenuSeparator />
         {grouped.map((g) => (
-          <SelectGroup key={g.role}>
-            <SelectLabel className="text-[10px] uppercase tracking-wide text-muted-foreground/70">
+          <div key={g.role}>
+            <div className="px-2 pt-1.5 pb-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
               {ROLE_LABEL[g.role]}
-            </SelectLabel>
+            </div>
             {g.items.map((lane) => {
               const backendOk =
                 !lane.backend || backendStatuses[lane.backend] === "running";
               return (
-                <SelectItem
+                <LaneMenuItem
                   key={lane.id}
-                  value={lane.id}
-                  className="text-[12px]"
+                  lane={lane}
+                  active={activeLaneId === lane.id}
+                  onSelect={() => setActiveLaneId(lane.id)}
                   disabled={!backendOk}
-                >
-                  <span className="font-medium">{lane.label}</span>
-                  <span className="ml-2 text-[10px] text-muted-foreground">
-                    {COST_LABEL[lane.cost_tier] ?? lane.cost_tier}
-                  </span>
-                  {lane.default_model ? (
-                    <span className="ml-1 text-[10px] text-muted-foreground/70">
-                      · {lane.default_model.replace(/^claude-/, "")}
-                    </span>
-                  ) : null}
-                  {!backendOk ? (
-                    <span className="ml-2 text-[10px] text-amber-500">
-                      backend down
-                    </span>
-                  ) : null}
-                </SelectItem>
+                  backendDown={!backendOk}
+                  description={
+                    !backendOk
+                      ? "backend unavailable"
+                      : lane.default_model
+                        ? `${lane.default_model.replace(/^claude-/, "")} · ${COST_LABEL[lane.cost_tier] ?? lane.cost_tier}`
+                        : COST_LABEL[lane.cost_tier] ?? lane.cost_tier
+                  }
+                />
               );
             })}
-          </SelectGroup>
+          </div>
         ))}
-      </SelectContent>
-    </Select>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+function LaneMenuItem({
+  lane,
+  active,
+  onSelect,
+  disabled,
+  backendDown,
+  description,
+}: {
+  lane: Lane;
+  active: boolean;
+  onSelect: () => void;
+  disabled?: boolean;
+  backendDown?: boolean;
+  description?: string;
+}) {
+  const Icon = ROLE_ICON[lane.role] ?? CodeIcon;
+  return (
+    <DropdownMenuItem
+      disabled={disabled}
+      onSelect={onSelect}
+      className={cn(
+        "flex items-start gap-2 pr-2 text-[12px]",
+        active && "bg-accent/40",
+      )}
+    >
+      <HugeiconsIcon
+        icon={Icon}
+        size={13}
+        strokeWidth={1.75}
+        className={cn(
+          "mt-0.5",
+          active ? "text-foreground" : "text-muted-foreground",
+          backendDown && "text-amber-500",
+        )}
+      />
+      <span className="flex min-w-0 flex-1 flex-col">
+        <span className={cn(backendDown && "text-muted-foreground")}>
+          {lane.label}
+          {backendDown ? (
+            <span className="ml-2 text-[10px] text-amber-500">backend down</span>
+          ) : null}
+        </span>
+        {description ? (
+          <span className="line-clamp-1 text-[10.5px] text-muted-foreground">
+            {description}
+          </span>
+        ) : null}
+      </span>
+      {active ? (
+        <HugeiconsIcon
+          icon={Tick02Icon}
+          size={12}
+          strokeWidth={2}
+          className="mt-0.5 shrink-0 text-foreground"
+        />
+      ) : null}
+    </DropdownMenuItem>
   );
 }

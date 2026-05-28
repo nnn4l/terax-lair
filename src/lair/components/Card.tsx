@@ -14,7 +14,6 @@ export function Card({ card }: { card: CardData }) {
   const [addingToChecklist, setAddingToChecklist] = useState(false);
   const workspace = useLair((s) => s.workspace);
   const label = card.agent === "claude" ? "Claude" : "Codex";
-  const tone = agentTone(card.agent);
 
   async function handleChecklistAdd(section: ChecklistSection) {
     const text = card.summary ?? card.outcome ?? card.raw_output.slice(0, 120);
@@ -27,11 +26,11 @@ export function Card({ card }: { card: CardData }) {
     <div
       data-lair-agent-card="true"
       data-lair-agent={card.agent}
-      className={`my-1.5 overflow-hidden rounded-xl border border-l-2 border-border/75 bg-background/70 shadow-[0_1px_0_color-mix(in_oklch,var(--foreground)_7%,transparent)_inset] transition-colors duration-200 hover:border-border ${tone.card}`}
+      className="my-1.5 overflow-hidden rounded-xl border border-border/75 bg-background/70 shadow-[0_1px_0_color-mix(in_oklch,var(--foreground)_7%,transparent)_inset] transition-colors duration-200 hover:border-border"
     >
       <div className="flex min-w-0 items-center justify-between gap-2 border-b border-border/55 bg-card/35 px-3 py-2">
         <div className="flex min-w-0 items-center gap-2">
-          <span className={`size-1.5 shrink-0 rounded-full ${tone.dot}`} />
+          <span className="size-1.5 shrink-0 rounded-full bg-primary/70" />
           <span className="shrink-0 text-[12px] font-semibold tracking-tight">
             {label}
           </span>
@@ -155,18 +154,6 @@ export function Card({ card }: { card: CardData }) {
       ) : null}
     </div>
   );
-}
-
-function agentTone(agent: CardData["agent"]) {
-  return agent === "claude"
-    ? {
-        card: "border-l-primary/55",
-        dot: "bg-primary/80 shadow-[0_0_12px_color-mix(in_oklch,var(--primary)_35%,transparent)]",
-      }
-    : {
-        card: "border-l-foreground/25",
-        dot: "bg-foreground/65 shadow-[0_0_12px_color-mix(in_oklch,var(--foreground)_20%,transparent)]",
-      };
 }
 
 function SectionLabel({ children }: { children: string }) {
