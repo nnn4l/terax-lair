@@ -30,6 +30,9 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "externalBin": [
+      "binaries/uniclaude-proxy"
+    ],
     "copyright": "Copyright 2026 Crynta",
     "license": "Apache-2.0",
     "publisher": "Crynta",

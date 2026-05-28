@@ -134,6 +134,21 @@ pub fn run() {
         .manage(LairState::new())
         .manage(ChecklistWatcher::default())
         .setup(|app| {
+            // Backend manager setup
+            crate::lair::backend_manager::BACKEND_MANAGER.set_app(app.handle().clone());
+            let handle = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                let lanes = crate::lair::lanes::load().unwrap_or_default();
+                let needs_proxy = lanes
+                    .iter()
+                    .any(|l| l.enabled && l.backend.as_deref() == Some("uniclaude-proxy"));
+                if needs_proxy {
+                    if let Err(e) = crate::lair::backend_manager::spawn_uniclaude_proxy() {
+                        eprintln!("uniclaude-proxy spawn failed: {e}");
+                    }
+                }
+            });
+
             let dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
             let initial = crate::lair::hub_tabs::load(&dir);
             app.manage(HubTabsState(Mutex::new(initial)));
