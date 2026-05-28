@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { cn } from "@/lib/utils";
 import { MessageResponse } from "@/components/ai-elements/message";
 import { appendChecklistItem } from "@/lair/api";
 import { useLair } from "@/lair/state";
@@ -12,8 +11,6 @@ export function Card({ card }: { card: CardData }) {
   const [expanded, setExpanded] = useState(false);
   const [addingToChecklist, setAddingToChecklist] = useState(false);
   const workspace = useLair((s) => s.workspace);
-  const accent =
-    card.agent === "claude" ? "border-orange-500/70" : "border-violet-500/70";
   const label = card.agent === "claude" ? "Claude" : "Codex";
 
   async function handleChecklistAdd(section: ChecklistSection) {
@@ -24,7 +21,7 @@ export function Card({ card }: { card: CardData }) {
   }
 
   return (
-    <div className={cn("my-2 rounded-lg border bg-card/70 px-2.5 py-2 shadow-sm", accent)}>
+    <div className="my-2 rounded-lg border border-border bg-card/70 px-2.5 py-2">
       <div className="mb-1.5 flex items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-2">
           <span className="shrink-0 text-[12px] font-semibold tracking-tight">
@@ -47,9 +44,7 @@ export function Card({ card }: { card: CardData }) {
       </div>
 
       {card.status === "streaming" ? (
-        <pre className="max-h-32 overflow-y-auto rounded-md bg-background/60 px-2 py-1.5 whitespace-pre-wrap text-[11px] text-muted-foreground">
-          {card.raw_output || "..."}
-        </pre>
+        <StreamingState raw={card.raw_output} />
       ) : null}
 
       {card.status === "summarizing" ? (
@@ -116,6 +111,39 @@ export function Card({ card }: { card: CardData }) {
           </p>
           {card.raw_output ? <RawOutput rawOutput={card.raw_output} /> : null}
         </>
+      ) : null}
+    </div>
+  );
+}
+
+function inferCurrentStep(raw: string): string {
+  if (!raw) return "starting...";
+  const lines = raw.split("\n").map((l) => l.trim()).filter(Boolean);
+  if (lines.length === 0) return "starting...";
+  const last = lines[lines.length - 1];
+  return last.replace(/^\[stderr\]\s*/, "").slice(0, 120);
+}
+
+function StreamingState({ raw }: { raw: string }) {
+  const [showRaw, setShowRaw] = useState(false);
+  const current = inferCurrentStep(raw);
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-start gap-2 text-[12px]">
+        <span className="mt-1.5 inline-block size-1.5 shrink-0 animate-pulse rounded-full bg-primary/70" />
+        <span className="min-w-0 flex-1 truncate text-foreground/85">{current}</span>
+      </div>
+      <button
+        type="button"
+        onClick={() => setShowRaw((v) => !v)}
+        className="text-[11px] font-medium text-muted-foreground hover:text-primary"
+      >
+        {showRaw ? "hide raw" : "show raw"}
+      </button>
+      {showRaw ? (
+        <pre className="max-h-32 overflow-y-auto rounded-md bg-background/60 px-2 py-1.5 whitespace-pre-wrap text-[11px] text-muted-foreground">
+          {raw || "..."}
+        </pre>
       ) : null}
     </div>
   );
