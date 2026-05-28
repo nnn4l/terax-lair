@@ -9,6 +9,7 @@ pub mod orchestrator;
 pub mod parser_client;
 pub mod phase_prompts;
 pub mod pillar_check;
+pub mod process_registry;
 pub mod pillars;
 pub mod queue;
 pub mod spec_import;
