@@ -18,7 +18,7 @@ export function PhaseDropdown() {
     <Select value={phase} onValueChange={(value) => setPhase(value as Phase)}>
       <SelectTrigger
         size="sm"
-        className="h-5 w-auto gap-1 rounded-md border-0 bg-background/70 px-1.5 py-0 text-[10.5px] font-medium text-foreground/90 shadow-none hover:bg-muted focus:bg-muted [&>svg]:size-3"
+        className="h-6 w-auto gap-1 rounded-md border border-border/60 bg-card px-1.5 py-0 text-[10.5px] text-muted-foreground transition-colors hover:border-border hover:bg-accent hover:text-foreground [&>svg]:size-3"
       >
         <SelectValue />
       </SelectTrigger>
