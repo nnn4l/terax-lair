@@ -20,9 +20,10 @@ describe("LairChat components", () => {
     expect(html).not.toContain("<option");
   });
 
-  test("lair chat wraps in graphite console surface", () => {
+  test("lair chat includes the graphite top glow", () => {
     const html = renderToStaticMarkup(<LairChat />);
     expect(html).toContain("data-lair-surface=\"graphite-console\"");
+    expect(html).toContain("bg-[radial-gradient");
   });
 
   test("lair chat renders a chat thread with composer affordances", () => {

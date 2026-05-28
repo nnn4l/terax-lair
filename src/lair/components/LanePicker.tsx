@@ -15,8 +15,9 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
+import { ModelDropdown } from "@/lair/components/ModelDropdown";
 import { useLair } from "@/lair/state";
-import type { Lane, LaneRole } from "@/lair/types";
+import type { Agent, Lane, LaneRole } from "@/lair/types";
 
 const ROLE_ORDER: LaneRole[] = ["implementor", "reviewer", "consultant"];
 const ROLE_LABEL: Record<LaneRole, string> = {
@@ -131,6 +132,12 @@ export function LanePicker() {
             })}
           </div>
         ))}
+        <DropdownMenuSeparator />
+        <div className="px-2 pt-1 pb-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+          Run settings
+        </div>
+        <LaneModelRow agent="claude" />
+        <LaneModelRow agent="codex" />
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -193,5 +200,33 @@ function LaneMenuItem({
         />
       ) : null}
     </DropdownMenuItem>
+  );
+}
+
+function LaneModelRow({ agent }: { agent: Agent }) {
+  const Icon = agent === "claude" ? ClaudeIcon : CodeIcon;
+  const label = agent === "claude" ? "Claude" : "Codex";
+  const description =
+    agent === "claude"
+      ? "Model and effort for Claude lanes"
+      : "Effort for Codex CLI lanes";
+  return (
+    <div className="mx-1 my-0.5 flex min-h-9 items-center gap-2 rounded-md px-2 py-1.5 text-[12px] hover:bg-accent/35">
+      <HugeiconsIcon
+        icon={Icon}
+        size={13}
+        strokeWidth={1.75}
+        className="shrink-0 text-muted-foreground"
+      />
+      <span className="flex min-w-0 flex-1 flex-col">
+        <span className="capitalize text-foreground/90">{label}</span>
+        <span className="line-clamp-1 text-[10.5px] text-muted-foreground">
+          {description}
+        </span>
+      </span>
+      <div className="min-w-0 shrink-0">
+        <ModelDropdown agent={agent} variant="menu" />
+      </div>
+    </div>
   );
 }
