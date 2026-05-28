@@ -82,12 +82,14 @@ export function LanePicker() {
   const isAuto = active?.id === "auto";
   const ActiveIcon = isAuto ? Route01Icon : active ? ROLE_ICON[active.role] : CodeIcon;
 
-  // Resolve display model: user override from Run Settings > lane default
+  // Resolve display model/effort. Skip model for backend lanes (DeepSeek) —
+  // they use Claude CLI internally with lane config, not the user's claude model override.
+  const isBackendLane = active?.backend != null;
   const userModel = active?.cli === "codex" ? codexModel : claudeModel;
   const userEffort = active?.cli === "codex" ? codexEffort : claudeEffort;
-  const displayModel = isAuto ? null : userModel ?? active?.default_model ?? null;
+  const displayModel = (isAuto || isBackendLane) ? null : userModel ?? active?.default_model ?? null;
   const displayEffort = isAuto ? null : userEffort ?? active?.default_effort ?? null;
-  const effortLetter: Record<string, string> = { low: "L", medium: "M", high: "H", xhigh: "X", max: "Mx" };
+  const effortAbbr: Record<string, string> = { low: "Low", medium: "Med", high: "Hi", xhigh: "X-Hi", max: "Max" };
 
   const grouped = ROLE_ORDER
     .map((role) => ({
@@ -116,7 +118,7 @@ export function LanePicker() {
           ) : null}
           {displayEffort ? (
             <span className="rounded-md border border-border/60 bg-muted/45 px-0.5 font-mono text-[9px] text-muted-foreground">
-              {effortLetter[displayEffort] ?? displayEffort[0]}
+              {effortAbbr[displayEffort] ?? displayEffort?.[0]}
             </span>
           ) : null}
           <HugeiconsIcon
@@ -170,7 +172,7 @@ export function LanePicker() {
                       : backendDown
                         ? "backend unavailable"
                         : lane.backend
-                          ? `LARPING ${lane.default_model?.replace(/^claude-/, "").replace(/(\d)-(\d)/g, "$1.$2") ?? "—"}`
+                          ? "CLI default"
                           : lane.default_model
                             ? `${lane.default_model.replace(/^claude-/, "").replace(/(\d)-(\d)/g, "$1.$2")}. ${COST_LABEL[lane.cost_tier] ?? lane.cost_tier}`
                             : COST_LABEL[lane.cost_tier] ?? lane.cost_tier
@@ -284,11 +286,11 @@ function LaneModelRow({ agent }: { agent: Agent }) {
 }
 
 const EFFORTS = [
-  { value: "low", label: "L" },
-  { value: "medium", label: "M" },
-  { value: "high", label: "H" },
-  { value: "xhigh", label: "X" },
-  { value: "max", label: "Mx" },
+  { value: "low", label: "Low" },
+  { value: "medium", label: "Med" },
+  { value: "high", label: "Hi" },
+  { value: "xhigh", label: "X-Hi" },
+  { value: "max", label: "Max" },
 ];
 
 function EffortOnlyDropdown({ agent }: { agent: Agent }) {
