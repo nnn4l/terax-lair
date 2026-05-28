@@ -1,4 +1,4 @@
-use crate::lair::types::Agent;
+use crate::lair::types::Lane;
 use std::path::Path;
 use std::process::Stdio;
 use std::time::Duration;
@@ -9,12 +9,13 @@ use tokio::time::timeout;
 pub const DEFAULT_AGENT_TIMEOUT: Duration = Duration::from_secs(300);
 
 pub struct AgentSpawnRequest {
-    pub agent: Agent,
+    pub lane: Lane,
     pub prompt: String,
     pub system_prompt: String,
-    pub model: Option<String>,
-    pub effort: Option<String>,
+    pub model_override: Option<String>,
+    pub effort_override: Option<String>,
     pub cwd: String,
+    pub card_id: String,
     pub program_override: Option<String>,
     pub args_override: Option<Vec<String>>,
 }
@@ -42,18 +43,25 @@ pub async fn run_agent_streaming_with_timeout<F>(
 where
     F: FnMut(String) + Send + 'static,
 {
-    let (program, args) = match (req.program_override, req.args_override) {
+    let (program, args) = match (req.program_override.clone(), req.args_override.clone()) {
         (Some(p), Some(a)) => (p, a),
-        _ => build_command(&req.agent, &req.prompt, &req.system_prompt, &req.model, &req.effort),
+        _ => build_command(&req.lane, &req.prompt, &req.system_prompt, &req.model_override, &req.effort_override),
     };
 
-    let mut child = Command::new(&program)
-        .args(&args)
+    let mut cmd = Command::new(&program);
+    cmd.args(&args)
         .current_dir(&req.cwd)
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
+        .stderr(Stdio::piped());
+    for (k, v) in &req.lane.env {
+        cmd.env(k, v);
+    }
+    let mut child = cmd
         .spawn()
         .map_err(|e| format!("spawn {program}: {e}"))?;
+    if let Some(pid) = child.id() {
+        crate::lair::process_registry::PROCESS_REGISTRY.register(req.card_id.clone(), pid);
+    }
 
     let stdout = child.stdout.take().ok_or("no stdout")?;
     let stderr = child.stderr.take().ok_or("no stderr")?;
@@ -84,6 +92,7 @@ where
         Ok(inner) => inner,
         Err(_) => {
             let _ = child.start_kill();
+            crate::lair::process_registry::PROCESS_REGISTRY.deregister(&req.card_id);
             return Err(format!("timeout after {}s", wall_clock.as_secs()));
         }
     };
@@ -93,19 +102,23 @@ where
         .await
         .map_err(|_| "wait timeout".to_string())?
         .map_err(|e| format!("wait: {e}"))?;
+    crate::lair::process_registry::PROCESS_REGISTRY.deregister(&req.card_id);
     Ok(status.code().unwrap_or(-1))
 }
 
 fn build_command(
-    agent: &Agent,
+    lane: &Lane,
     prompt: &str,
     system_prompt: &str,
     model: &Option<String>,
     effort: &Option<String>,
 ) -> (String, Vec<String>) {
-    let (program, args) = match agent {
-        Agent::Claude => build_claude(prompt, system_prompt, model, effort),
-        Agent::Codex => build_codex(prompt, system_prompt, model, effort),
+    let effective_model = model.clone().or_else(|| lane.default_model.clone());
+    let effective_effort = effort.clone().or_else(|| lane.default_effort.clone());
+    let (program, args) = match lane.cli.as_str() {
+        "claude" => build_claude(prompt, system_prompt, &effective_model, &effective_effort),
+        "codex" => build_codex(prompt, system_prompt, &effective_model, &effective_effort),
+        other => (other.to_string(), vec![prompt.to_string()]),
     };
     let resolved = resolve_program(&program);
     let mut full_args = resolved.prefix_args;
@@ -269,14 +282,36 @@ mod tests {
 
     #[tokio::test]
     async fn stall_timeout_aborts_long_running_process() {
+        use crate::lair::types::{CostTier, LaneRole};
+        use std::collections::HashMap;
         use std::time::Duration;
+
+        fn mk_lane(id: &str) -> Lane {
+            Lane {
+                id: id.into(),
+                label: id.into(),
+                cli: "claude".into(),
+                env: HashMap::new(),
+                default_model: None,
+                default_effort: None,
+                role: LaneRole::Implementor,
+                cost_tier: CostTier::Cheap,
+                clear_required: false,
+                backend: None,
+                auto_bias: vec![],
+                enabled: true,
+                context_window: None,
+            }
+        }
+
         let req = AgentSpawnRequest {
-            agent: Agent::Claude,
+            lane: mk_lane("test"),
             prompt: "x".into(),
             system_prompt: String::new(),
-            model: None,
-            effort: None,
+            model_override: None,
+            effort_override: None,
             cwd: ".".into(),
+            card_id: "card-stall-test".into(),
             program_override: Some(if cfg!(windows) { "powershell".into() } else { "sh".into() }),
             args_override: Some(if cfg!(windows) {
                 vec![

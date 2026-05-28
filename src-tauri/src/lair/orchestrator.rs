@@ -63,8 +63,15 @@ pub async fn lair_send_message(
     let config = config.inner().clone();
     let lair_state = lair_state.inner().clone();
     let mut ids = Vec::new();
-    match req.agent_choice {
-        AgentChoice::Claude => {
+    let agent = if req.use_auto {
+        Agent::Codex // legacy: auto routes later, use Codex as default
+    } else if req.lane_id == "codex" {
+        Agent::Codex
+    } else {
+        Agent::Claude
+    };
+    match agent {
+        Agent::Claude => {
             emit_narration_background(
                 &app,
                 &config,
@@ -72,55 +79,13 @@ pub async fn lair_send_message(
             );
             ids.push(spawn(app, config, lair_state, Agent::Claude, &req).await?);
         }
-        AgentChoice::Codex => {
+        Agent::Codex => {
             emit_narration_background(
                 &app,
                 &config,
                 NarrationTrigger::Dispatching { agent: Agent::Codex },
             );
             ids.push(spawn(app, config, lair_state, Agent::Codex, &req).await?);
-        }
-        AgentChoice::Compare => {
-            emit_narration_background(&app, &config, NarrationTrigger::CompareLaunching);
-            let claude = spawn(
-                app.clone(),
-                config.clone(),
-                lair_state.clone(),
-                Agent::Claude,
-                &req,
-            );
-            let codex = spawn(app, config, lair_state, Agent::Codex, &req);
-            let (claude_id, codex_id) = tokio::join!(claude, codex);
-            ids.push(claude_id?);
-            ids.push(codex_id?);
-        }
-        AgentChoice::Auto => {
-            let api_key = get_openrouter_key().unwrap_or_default();
-            let route = route_agent(RouteRequest {
-                prompt: req.prompt.clone(),
-                phase: phase_key(&req.phase),
-                api_key,
-                model: config.openrouter_model.clone(),
-            })
-            .await
-            .unwrap_or_else(|_| RouteResult {
-                agent: fallback_agent_for_phase(&req.phase),
-                reason: "fallback".into(),
-            });
-            let agent = if route.agent == "codex" {
-                Agent::Codex
-            } else {
-                Agent::Claude
-            };
-            emit_narration_background(
-                &app,
-                &config,
-                NarrationTrigger::Routing {
-                    agent: agent.clone(),
-                    reason: route.reason.clone(),
-                },
-            );
-            ids.push(spawn(app, config, lair_state, agent, &req).await?);
         }
     }
     Ok(ids)
@@ -208,12 +173,13 @@ async fn spawn(
 
     let exit = run_agent_streaming(
         AgentSpawnRequest {
-            agent: agent.clone(),
+            lane: lane_from_agent(&agent),
             prompt: effective_prompt,
             system_prompt,
-            model: model.clone(),
-            effort: effort.clone(),
+            model_override: model.clone(),
+            effort_override: effort.clone(),
             cwd: req.workspace.clone(),
+            card_id: id.clone(),
             program_override: None,
             args_override: None,
         },
@@ -729,6 +695,34 @@ fn agent_key(agent: &Agent) -> String {
     .to_string()
 }
 
+fn lane_from_agent(agent: &Agent) -> Lane {
+    use std::collections::HashMap;
+    Lane {
+        id: match agent {
+            Agent::Claude => "claude".into(),
+            Agent::Codex => "codex".into(),
+        },
+        label: match agent {
+            Agent::Claude => "Claude".into(),
+            Agent::Codex => "Codex".into(),
+        },
+        cli: match agent {
+            Agent::Claude => "claude".into(),
+            Agent::Codex => "codex".into(),
+        },
+        env: HashMap::new(),
+        default_model: None,
+        default_effort: None,
+        role: LaneRole::Implementor,
+        cost_tier: CostTier::Standard,
+        clear_required: false,
+        backend: None,
+        auto_bias: vec![],
+        enabled: true,
+        context_window: None,
+    }
+}
+
 fn phase_key(phase: &Phase) -> String {
     match phase {
         Phase::Implement => "implement",
@@ -785,7 +779,8 @@ fn critique_request(workspace: String, prompt: String) -> SendMessageRequest {
     SendMessageRequest {
         turn_id: Uuid::new_v4().to_string(),
         prompt,
-        agent_choice: AgentChoice::Codex,
+        lane_id: "codex".into(),
+        use_auto: false,
         phase: Phase::Critique,
         workspace,
         task_context: None,
@@ -802,10 +797,10 @@ async fn dispatch_one(
     lair_state: Arc<LairState>,
     req: SendMessageRequest,
 ) -> Result<(), String> {
-    let agent = match req.agent_choice {
-        AgentChoice::Claude => Agent::Claude,
-        AgentChoice::Codex => Agent::Codex,
-        AgentChoice::Compare | AgentChoice::Auto => Agent::Codex,
+    let agent = if req.use_auto || req.lane_id == "codex" {
+        Agent::Codex
+    } else {
+        Agent::Claude
     };
     let _ = spawn(app, config, lair_state, agent, &req).await?;
     Ok(())
