@@ -10,6 +10,7 @@ import {
   Settings01Icon,
   UserMultiple02Icon,
   KeyboardIcon,
+  SourceCodeIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
@@ -20,6 +21,7 @@ import { GeneralSection } from "./sections/GeneralSection";
 import { ModelsSection } from "./sections/ModelsSection";
 import { ShortcutsSection } from "./sections/ShortcutsSection";
 import { ThemesSection } from "./sections/ThemesSection";
+import { LanesSettingsPanel } from "@/lair/components/LanesSettingsPanel";
 
 const TABS: { id: SettingsTab; label: string; icon: typeof Settings01Icon, component: () => JSX.Element }[] =
   [
@@ -28,6 +30,7 @@ const TABS: { id: SettingsTab; label: string; icon: typeof Settings01Icon, compo
     { id: "shortcuts", label: "Shortcuts", icon: KeyboardIcon, component: ShortcutsSection },
     { id: "models", label: "Models", icon: AiScanIcon, component: ModelsSection },
     { id: "agents", label: "Agents", icon: UserMultiple02Icon, component: AgentsSection },
+    { id: "lanes", label: "Lanes", icon: SourceCodeIcon, component: LanesSettingsPanel },
     { id: "about", label: "About", icon: InformationCircleIcon, component: AboutSection },
   ];
 
@@ -37,6 +40,7 @@ const VALID_TABS: SettingsTab[] = [
   "shortcuts",
   "models",
   "agents",
+  "lanes",
   "about",
 ];
 

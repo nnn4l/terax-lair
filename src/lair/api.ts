@@ -265,6 +265,10 @@ export async function onBackendStatusChanged(
   return await listen<BackendStatusEvent>("lair-backend-status-changed", (e) => cb(e.payload));
 }
 
+export async function restartBackend(backendId: string): Promise<void> {
+  await invoke("lair_restart_backend", { backendId });
+}
+
 export async function onLaneCleared(
   cb: (laneId: string) => void,
 ): Promise<UnlistenFn> {

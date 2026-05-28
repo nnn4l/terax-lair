@@ -3,7 +3,7 @@ use once_cell::sync::Lazy;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::process::{Child, Stdio};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use tauri::AppHandle;
 
 pub struct ManagedBackend {
@@ -23,27 +23,34 @@ struct BackendEntry {
     failures: u32,
 }
 
+struct BackendManagerInner {
+    entries: HashMap<String, BackendEntry>,
+    app: Option<AppHandle>,
+}
+
 pub struct BackendManager {
-    inner: Mutex<HashMap<String, BackendEntry>>,
-    app: Mutex<Option<AppHandle>>,
+    inner: Mutex<BackendManagerInner>,
 }
 
 impl BackendManager {
     pub fn new() -> Self {
         Self {
-            inner: Mutex::new(HashMap::new()),
-            app: Mutex::new(None),
+            inner: Mutex::new(BackendManagerInner {
+                entries: HashMap::new(),
+                app: None,
+            }),
         }
     }
 
     pub fn set_app(&self, app: AppHandle) {
-        *self.app.lock().unwrap() = Some(app);
+        self.inner.lock().unwrap().app = Some(app);
     }
 
     pub fn status(&self, id: &str) -> BackendStatus {
         self.inner
             .lock()
             .unwrap()
+            .entries
             .get(id)
             .map(|e| e.status.clone())
             .unwrap_or(BackendStatus::Stopped)
@@ -61,6 +68,8 @@ impl BackendManager {
 
         let child = child_cmd.spawn().map_err(|e| format!("spawn {id}: {e}"))?;
 
+        let health_url = backend.health_url.clone();
+
         let entry = BackendEntry {
             config: backend,
             status: BackendStatus::Running,
@@ -68,14 +77,55 @@ impl BackendManager {
             last_health: std::time::Instant::now(),
             failures: 0,
         };
-        self.inner.lock().unwrap().insert(id.clone(), entry);
+        self.inner.lock().unwrap().entries.insert(id.clone(), entry);
+
+        if let Some(url) = health_url {
+            let id_c = id.clone();
+            let mgr = BACKEND_MANAGER_ARC.clone();
+            tauri::async_runtime::spawn(async move {
+                let client = reqwest::Client::builder()
+                    .timeout(std::time::Duration::from_secs(2))
+                    .build()
+                    .ok();
+                let Some(client) = client else { return };
+                loop {
+                    tokio::time::sleep(std::time::Duration::from_secs(10)).await;
+                    let resp = client.get(&url).send().await;
+                    let healthy = matches!(resp, Ok(r) if r.status().is_success());
+                    let mut guard = mgr.inner.lock().unwrap();
+                    let Some(entry) = guard.entries.get_mut(&id_c) else { break };
+                    if healthy {
+                        entry.failures = 0;
+                        if !matches!(entry.status, BackendStatus::Running) {
+                            entry.status = BackendStatus::Running;
+                            let app = guard.app.clone();
+                            drop(guard);
+                            emit_backend_event(&app, &id_c, BackendStatus::Running);
+                        }
+                    } else {
+                        entry.failures += 1;
+                        if entry.failures >= 3
+                            && !matches!(entry.status, BackendStatus::Crashed)
+                        {
+                            entry.status = BackendStatus::Crashed;
+                            let app = guard.app.clone();
+                            drop(guard);
+                            emit_backend_event(&app, &id_c, BackendStatus::Crashed);
+                            let _ = mgr.restart(&id_c);
+                            break;
+                        }
+                    }
+                }
+            });
+        }
+
         self.emit(&id, BackendStatus::Running);
         Ok(())
     }
 
     pub fn stop(&self, id: &str) -> Result<(), String> {
         let mut guard = self.inner.lock().unwrap();
-        if let Some(entry) = guard.get_mut(id) {
+        if let Some(entry) = guard.entries.get_mut(id) {
             if let Some(mut c) = entry.child.take() {
                 let _ = c.kill();
                 let _ = c.wait();
@@ -90,7 +140,7 @@ impl BackendManager {
     pub fn restart(&self, id: &str) -> Result<(), String> {
         let cfg = {
             let guard = self.inner.lock().unwrap();
-            guard.get(id).map(|e| ManagedBackend {
+            guard.entries.get(id).map(|e| ManagedBackend {
                 id: e.config.id.clone(),
                 program: e.config.program.clone(),
                 args: e.config.args.clone(),
@@ -105,23 +155,15 @@ impl BackendManager {
     }
 
     pub fn stop_all(&self) {
-        let ids: Vec<String> = self.inner.lock().unwrap().keys().cloned().collect();
+        let ids: Vec<String> = self.inner.lock().unwrap().entries.keys().cloned().collect();
         for id in ids {
             let _ = self.stop(&id);
         }
     }
 
     fn emit(&self, id: &str, status: BackendStatus) {
-        if let Some(app) = self.app.lock().unwrap().as_ref() {
-            use tauri::Emitter;
-            let _ = app.emit(
-                "lair-backend-status-changed",
-                BackendStatusEvent {
-                    id: id.to_string(),
-                    status,
-                },
-            );
-        }
+        let app = self.inner.lock().unwrap().app.clone();
+        emit_backend_event(&app, id, status);
     }
 }
 
@@ -131,7 +173,30 @@ impl Default for BackendManager {
     }
 }
 
-pub static BACKEND_MANAGER: Lazy<BackendManager> = Lazy::new(BackendManager::new);
+fn emit_backend_event(app: &Option<AppHandle>, id: &str, status: BackendStatus) {
+    if let Some(app) = app {
+        use tauri::Emitter;
+        let _ = app.emit(
+            "lair-backend-status-changed",
+            BackendStatusEvent {
+                id: id.to_string(),
+                status,
+            },
+        );
+    }
+}
+
+pub static BACKEND_MANAGER_ARC: Lazy<Arc<BackendManager>> =
+    Lazy::new(|| Arc::new(BackendManager::new()));
+
+// Convenience: borrows from the Arc-backed singleton. Only valid after first access.
+pub fn backend_manager() -> &'static BackendManager {
+    &BACKEND_MANAGER_ARC
+}
+
+// Keep old name working for existing callers
+pub static BACKEND_MANAGER: Lazy<Arc<BackendManager>> =
+    Lazy::new(|| BACKEND_MANAGER_ARC.clone());
 
 /// Resolve the bundled sidecar binary path at runtime.
 pub fn sidecar_path(name: &str) -> Result<PathBuf, String> {
@@ -145,7 +210,7 @@ pub fn sidecar_path(name: &str) -> Result<PathBuf, String> {
             return Ok(dev);
         }
     }
-    // Release mode: alongside the exe in the resource dir
+    // Release mode: alongside the exe
     let exe = std::env::current_exe().map_err(|e| format!("current_exe: {e}"))?;
     let exe_dir = exe.parent().ok_or("no exe parent dir")?;
     let candidate = exe_dir
@@ -154,18 +219,13 @@ pub fn sidecar_path(name: &str) -> Result<PathBuf, String> {
     if candidate.exists() {
         return Ok(candidate);
     }
-    // Fallback: check the resource dir one level up (Tauri bundle layout)
-    let resource_candidate = exe_dir
-        .join("_up_")
-        .join("binaries")
-        .join(format!("{name}-x86_64-pc-windows-msvc.exe"));
-    if resource_candidate.exists() {
-        return Ok(resource_candidate);
-    }
     Err(format!("sidecar binary not found: {name}"))
 }
 
 pub fn spawn_uniclaude_proxy() -> Result<(), String> {
+    // Port fallback: if port 9223 is occupied, restart will fail until the user
+    // edits ~/.lair/uniclaude-proxy-port.txt and restarts the backend from settings.
+    // Full automatic fallback is M4 work.
     let path = sidecar_path("uniclaude-proxy")?;
     BACKEND_MANAGER.start(ManagedBackend {
         id: "uniclaude-proxy".into(),

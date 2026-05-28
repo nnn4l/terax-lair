@@ -137,7 +137,6 @@ pub fn run() {
         .setup(|app| {
             // Backend manager setup
             crate::lair::backend_manager::BACKEND_MANAGER.set_app(app.handle().clone());
-            let handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {
                 let lanes = crate::lair::lanes::load().unwrap_or_default();
                 let needs_proxy = lanes
