@@ -50,9 +50,13 @@ import { getLaunchDir } from "@/lib/launchDir";
 import { quoteShellArg } from "@/lib/shellQuote";
 import { useZoom } from "@/lib/useZoom";
 import { sendMessage } from "@/lair/api";
+import { DashboardView } from "@/lair/components/DashboardView";
 import { LairFloatingSidebar } from "@/lair/components/LairFloatingSidebar";
+import { OpenWorkspaceDialog } from "@/lair/components/OpenWorkspaceDialog";
 import { QueuePanel } from "@/lair/components/QueuePanel";
 import { SpecImportModal } from "@/lair/components/SpecImportModal";
+import { TabStrip } from "@/lair/components/TabStrip";
+import { useHub } from "@/lair/hub";
 import { useLair } from "@/lair/state";
 import type { QueueItem } from "@/lair/types";
 import { resolveLairWorkspace } from "@/lair/workspace";
@@ -392,6 +396,9 @@ export default function App() {
 
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [newEditorOpen, setNewEditorOpen] = useState(false);
+  const [openWorkspaceDialog, setOpenWorkspaceDialog] = useState(false);
+  const activeHubTab = useHub((s) => s.activeTab());
+  const isHubDashboard = activeHubTab?.kind === "dashboard";
   const miniOpen = useChatStore((s) => s.mini.open);
   const activeSessionId = useChatStore((s) => s.activeSessionId);
   const openMini = useChatStore((s) => s.openMini);
@@ -407,6 +414,20 @@ export default function App() {
   const lairWorkspace = useLair((s) => s.workspace);
   const setLairWorkspace = useLair((s) => s.setWorkspace);
   const [specImportOpen, setSpecImportOpen] = useState(false);
+
+  useEffect(() => {
+    if (activeHubTab?.kind !== "repo" || !activeHubTab.repo_path) return;
+    setLairWorkspace(activeHubTab.repo_path);
+    setLaunchCwd(activeHubTab.repo_path);
+    resetWorkspace(activeHubTab.repo_path);
+    void native.workspaceAuthorize(activeHubTab.repo_path);
+  }, [
+    activeHubTab?.id,
+    activeHubTab?.kind,
+    activeHubTab?.repo_path,
+    resetWorkspace,
+    setLairWorkspace,
+  ]);
 
   useEffect(() => {
     if (activeSessionId) firePendingReviewForSession(activeSessionId);
@@ -1427,35 +1448,43 @@ export default function App() {
     <ThemeProvider>
       <TooltipProvider>
         <div className="relative flex h-screen flex-col overflow-hidden bg-background text-foreground">
-          <Header
-            tabs={tabs}
-            activeId={activeId}
-            onSelect={setActiveId}
-            onNew={openNewTab}
-            onNewPrivate={openNewPrivateTab}
-            onNewPreview={() => openPreviewTab("")}
-            onNewEditor={() => setNewEditorOpen(true)}
-            onNewGitGraph={openGitGraphFromContext}
-            onClose={handleClose}
-            onPin={pinTab}
-            onToggleSidebar={toggleSidebar}
-            onSplit={splitActivePaneInActiveTab}
-            canSplit={
-              activeTerminalTab !== null &&
-              leafIds(activeTerminalTab.paneTree).length < MAX_PANES_PER_TAB
-            }
-            onActivateAgent={onActivateAgent}
-            onActivateLocalAgent={onActivateLocalAgent}
-            onOpenSettings={() => void openSettingsWindow()}
-            searchTarget={searchTarget}
-            searchRef={searchInlineRef}
-          />
+          <TabStrip onOpenWorkspace={() => setOpenWorkspaceDialog(true)} />
 
-          <main className="zoom-content flex min-h-0 flex-1 flex-col">
-            <ResizablePanelGroup
-              orientation="horizontal"
-              className="min-h-0 flex-1"
-            >
+          {isHubDashboard ? (
+            <main className="zoom-content min-h-0 flex-1">
+              <DashboardView />
+            </main>
+          ) : (
+            <div key={activeHubTab?.id ?? "ide"} className="contents">
+              <Header
+                tabs={tabs}
+                activeId={activeId}
+                onSelect={setActiveId}
+                onNew={openNewTab}
+                onNewPrivate={openNewPrivateTab}
+                onNewPreview={() => openPreviewTab("")}
+                onNewEditor={() => setNewEditorOpen(true)}
+                onNewGitGraph={openGitGraphFromContext}
+                onClose={handleClose}
+                onPin={pinTab}
+                onToggleSidebar={toggleSidebar}
+                onSplit={splitActivePaneInActiveTab}
+                canSplit={
+                  activeTerminalTab !== null &&
+                  leafIds(activeTerminalTab.paneTree).length < MAX_PANES_PER_TAB
+                }
+                onActivateAgent={onActivateAgent}
+                onActivateLocalAgent={onActivateLocalAgent}
+                onOpenSettings={() => void openSettingsWindow()}
+                searchTarget={searchTarget}
+                searchRef={searchInlineRef}
+              />
+
+              <main className="zoom-content flex min-h-0 flex-1 flex-col">
+                <ResizablePanelGroup
+                  orientation="horizontal"
+                  className="min-h-0 flex-1"
+                >
               <ResizablePanel
                 id="sidebar"
                 panelRef={sidebarRef}
@@ -1665,7 +1694,14 @@ export default function App() {
                 </AlertDialogAction>
               </AlertDialogFooter>
             </AlertDialogContent>
-          </AlertDialog>
+              </AlertDialog>
+            </div>
+          )}
+
+          <OpenWorkspaceDialog
+            open={openWorkspaceDialog}
+            onOpenChange={setOpenWorkspaceDialog}
+          />
         </div>
       </TooltipProvider>
     </ThemeProvider>

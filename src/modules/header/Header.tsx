@@ -5,8 +5,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { WindowControls } from "@/components/WindowControls";
-import { IS_MAC, KEY_SEP, USE_CUSTOM_WINDOW_CONTROLS } from "@/lib/platform";
+import { IS_MAC, KEY_SEP } from "@/lib/platform";
 import { usePreferencesStore } from "@/modules/settings/preferences";
 import {
   getBindingTokens,
@@ -218,13 +217,6 @@ export function Header({
       )}
 
       {!IS_MAC && settingsButton}
-
-      {USE_CUSTOM_WINDOW_CONTROLS && (
-        <>
-          <span className="ml-1 h-5 w-px shrink-0 bg-border" />
-          <WindowControls />
-        </>
-      )}
     </div>
   );
 }

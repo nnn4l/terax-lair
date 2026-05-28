@@ -1,8 +1,12 @@
 use crate::lair::types::Agent;
 use std::path::Path;
 use std::process::Stdio;
+use std::time::Duration;
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command;
+use tokio::time::timeout;
+
+pub const DEFAULT_AGENT_TIMEOUT: Duration = Duration::from_secs(300);
 
 pub struct AgentSpawnRequest {
     pub agent: Agent,
@@ -22,7 +26,18 @@ struct Resolved {
 
 pub async fn run_agent_streaming<F>(
     req: AgentSpawnRequest,
+    on_chunk: F,
+) -> Result<i32, String>
+where
+    F: FnMut(String) + Send + 'static,
+{
+    run_agent_streaming_with_timeout(req, on_chunk, DEFAULT_AGENT_TIMEOUT).await
+}
+
+pub async fn run_agent_streaming_with_timeout<F>(
+    req: AgentSpawnRequest,
     mut on_chunk: F,
+    wall_clock: Duration,
 ) -> Result<i32, String>
 where
     F: FnMut(String) + Send + 'static,
@@ -47,22 +62,37 @@ where
     let mut out_done = false;
     let mut err_done = false;
 
-    while !out_done || !err_done {
-        tokio::select! {
-            line = out_reader.next_line(), if !out_done => match line {
-                Ok(Some(l)) => on_chunk(format!("{l}\n")),
-                Ok(None) => out_done = true,
-                Err(e) => return Err(format!("stdout read: {e}")),
-            },
-            line = err_reader.next_line(), if !err_done => match line {
-                Ok(Some(l)) => on_chunk(format!("[stderr] {l}\n")),
-                Ok(None) => err_done = true,
-                Err(e) => return Err(format!("stderr read: {e}")),
-            },
+    let drain = async {
+        while !out_done || !err_done {
+            tokio::select! {
+                line = out_reader.next_line(), if !out_done => match line {
+                    Ok(Some(l)) => on_chunk(format!("{l}\n")),
+                    Ok(None) => out_done = true,
+                    Err(e) => return Err(format!("stdout read: {e}")),
+                },
+                line = err_reader.next_line(), if !err_done => match line {
+                    Ok(Some(l)) => on_chunk(format!("[stderr] {l}\n")),
+                    Ok(None) => err_done = true,
+                    Err(e) => return Err(format!("stderr read: {e}")),
+                },
+            }
         }
-    }
+        Ok::<(), String>(())
+    };
 
-    let status = child.wait().await.map_err(|e| format!("wait: {e}"))?;
+    let drain_result = match timeout(wall_clock, drain).await {
+        Ok(inner) => inner,
+        Err(_) => {
+            let _ = child.start_kill();
+            return Err(format!("timeout after {}s", wall_clock.as_secs()));
+        }
+    };
+    drain_result?;
+
+    let status = timeout(Duration::from_secs(2), child.wait())
+        .await
+        .map_err(|_| "wait timeout".to_string())?
+        .map_err(|e| format!("wait: {e}"))?;
     Ok(status.code().unwrap_or(-1))
 }
 
@@ -235,5 +265,30 @@ mod tests {
 
         assert_eq!(args[0], "exec");
         assert!(args.iter().any(|arg| arg == "--skip-git-repo-check"));
+    }
+
+    #[tokio::test]
+    async fn stall_timeout_aborts_long_running_process() {
+        use std::time::Duration;
+        let req = AgentSpawnRequest {
+            agent: Agent::Claude,
+            prompt: "x".into(),
+            system_prompt: String::new(),
+            model: None,
+            effort: None,
+            cwd: ".".into(),
+            program_override: Some(if cfg!(windows) { "powershell".into() } else { "sh".into() }),
+            args_override: Some(if cfg!(windows) {
+                vec![
+                    "-NoProfile".into(),
+                    "-Command".into(),
+                    "Start-Sleep -Seconds 60".into(),
+                ]
+            } else {
+                vec!["-c".into(), "sleep 60".into()]
+            }),
+        };
+        let result = run_agent_streaming_with_timeout(req, |_| {}, Duration::from_millis(300)).await;
+        assert!(matches!(result, Err(e) if e.contains("timeout")));
     }
 }

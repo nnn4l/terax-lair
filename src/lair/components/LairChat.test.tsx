@@ -24,10 +24,10 @@ describe("LairChat components", () => {
     expect(html).not.toContain("<option");
   });
 
-  test("lair chat includes the mini-window top gradient", () => {
+  test("lair chat includes the graphite top glow", () => {
     const html = renderToStaticMarkup(<LairChat />);
-    expect(html).toContain("bg-gradient-to-b");
-    expect(html).toContain("from-foreground/[0.03]");
+    expect(html).toContain("data-lair-surface=\"graphite-console\"");
+    expect(html).toContain("bg-[radial-gradient");
   });
 
   test("lair chat renders a chat thread with composer affordances", () => {
@@ -61,10 +61,16 @@ describe("LairChat components", () => {
     );
 
     expect(chatHtml).toContain('data-lair-thread="true"');
+    expect(chatHtml).toContain('data-lair-surface="graphite-console"');
+    expect(chatHtml).toContain('data-lair-composer="command-surface"');
     expect(chatHtml).toContain('aria-label="Message Lair"');
     expect(chatHtml).toContain('aria-label="Send message"');
     expect(turnHtml).toContain('data-lair-role="user"');
     expect(turnHtml).toContain('data-lair-role="assistant"');
+    expect(turnHtml).toContain('data-lair-turn="timeline"');
+    expect(turnHtml).toContain('data-lair-phase="prompt"');
+    expect(turnHtml).toContain('data-lair-phase="agent-work"');
+    expect(turnHtml).toContain('data-lair-card-section="result"');
     expect(turnHtml).toContain("Make the summary");
     expect(turnHtml).toContain("Implemented");
     expect(turnHtml).toContain('aria-label="Copy assistant response"');
@@ -118,6 +124,9 @@ describe("LairChat components", () => {
     };
 
     const html = renderToStaticMarkup(<Card card={card} />);
+    expect(html).toContain('data-lair-agent-card="true"');
+    expect(html).toContain('data-lair-agent="codex"');
+    expect(html).toContain('data-lair-card-section="issue"');
     expect(html).toContain("summarizer failed");
     expect(html).toContain("raw details");
     expect(html).toContain("Codex");

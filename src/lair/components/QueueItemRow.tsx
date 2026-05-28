@@ -1,11 +1,12 @@
 import { cn } from "@/lib/utils";
+import { QueueItemMenu } from "@/lair/components/QueueItemMenu";
 import type { QueueItem } from "@/lair/types";
 
 interface Props {
   item: QueueItem;
   depth?: number;
   currentId: string | null;
-  onPin: (id: string) => void;
+  pinnedId: string | null;
   onSendNow: (id: string) => void;
 }
 
@@ -13,7 +14,7 @@ export function QueueItemRow({
   item,
   depth = 0,
   currentId,
-  onPin,
+  pinnedId,
   onSendNow,
 }: Props) {
   const isCurrent = item.id === currentId;
@@ -54,20 +55,11 @@ export function QueueItemRow({
             {item.agent_hint}
           </span>
         ) : null}
-        <button
-          type="button"
-          onClick={() => onPin(item.id)}
-          className="shrink-0 rounded px-1 text-[10px] text-muted-foreground opacity-0 transition-opacity hover:bg-muted hover:text-foreground group-hover:opacity-100"
-        >
-          pin
-        </button>
-        <button
-          type="button"
-          onClick={() => onSendNow(item.id)}
-          className="shrink-0 rounded px-1 text-[10px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-        >
-          send
-        </button>
+        <QueueItemMenu
+          item={item}
+          isPinned={item.id === pinnedId}
+          onSendNow={onSendNow}
+        />
       </div>
       {item.children.map((child) => (
         <QueueItemRow
@@ -75,7 +67,7 @@ export function QueueItemRow({
           item={child}
           depth={depth + 1}
           currentId={currentId}
-          onPin={onPin}
+          pinnedId={pinnedId}
           onSendNow={onSendNow}
         />
       ))}

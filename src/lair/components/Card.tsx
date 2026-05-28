@@ -12,6 +12,7 @@ export function Card({ card }: { card: CardData }) {
   const [addingToChecklist, setAddingToChecklist] = useState(false);
   const workspace = useLair((s) => s.workspace);
   const label = card.agent === "claude" ? "Claude" : "Codex";
+  const tone = agentTone(card.agent);
 
   async function handleChecklistAdd(section: ChecklistSection) {
     const text = card.summary ?? card.outcome ?? card.raw_output.slice(0, 120);
@@ -21,20 +22,24 @@ export function Card({ card }: { card: CardData }) {
   }
 
   return (
-    <div className="my-2 overflow-hidden rounded-xl border border-white/5 bg-white/[0.03] backdrop-blur-sm">
-      <div className="h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
-      <div className="px-3 py-2.5">
+    <div
+      data-lair-agent-card="true"
+      data-lair-agent={card.agent}
+      className={`my-1.5 overflow-hidden rounded-xl border border-l-2 border-border/75 bg-background/70 shadow-[0_1px_0_color-mix(in_oklch,var(--foreground)_7%,transparent)_inset] transition-colors duration-200 hover:border-border ${tone.card}`}
+    >
+      <div className="flex min-w-0 items-center justify-between gap-2 border-b border-border/55 bg-card/35 px-3 py-2">
         <div className="flex min-w-0 items-center gap-2">
+          <span className={`size-1.5 shrink-0 rounded-full ${tone.dot}`} />
           <span className="shrink-0 text-[12px] font-semibold tracking-tight">
             {label}
           </span>
           {card.model ? (
             <span
-              className="truncate rounded bg-muted px-1.5 py-0.5 text-[10px] whitespace-nowrap text-muted-foreground"
-              title={`${card.model}${card.effort ? ` · ${card.effort}` : ""}`}
+              className="truncate rounded-md border border-border/60 bg-muted/45 px-1.5 py-0.5 font-mono text-[10px] whitespace-nowrap text-muted-foreground"
+              title={`${card.model}${card.effort ? ` / ${card.effort}` : ""}`}
             >
               {shortModelLabel(card.model)}
-              {card.effort ? `·${card.effort[0]}` : ""}
+              {card.effort ? `/${card.effort[0]}` : ""}
             </span>
           ) : null}
         </div>
@@ -45,74 +50,108 @@ export function Card({ card }: { card: CardData }) {
       </div>
 
       {card.status === "streaming" ? (
-        <StreamingState raw={card.raw_output} />
+        <div data-lair-card-section="progress" className="px-3 py-2.5">
+          <StreamingState raw={card.raw_output} />
+        </div>
       ) : null}
 
       {card.status === "summarizing" ? (
-        <p className="text-[12px] text-muted-foreground italic">
-          summarizing...
-        </p>
+        <div data-lair-card-section="progress" className="px-3 py-2.5">
+          <SectionLabel>progress</SectionLabel>
+          <p className="mt-1 text-[12px] text-muted-foreground italic">
+            summarizing...
+          </p>
+        </div>
       ) : null}
 
       {card.status === "done" && card.summary ? (
         <>
-          <MessageResponse className="text-[13px] leading-relaxed">
-            {card.summary}
-          </MessageResponse>
-          {card.outcome ? (
-            <MessageResponse className="mt-1 text-[12px] text-muted-foreground">
-              {card.outcome}
+          <div data-lair-card-section="result" className="px-3 py-2.5">
+            <SectionLabel>result</SectionLabel>
+            <MessageResponse className="text-[13px] leading-relaxed text-foreground/90">
+              {card.summary}
             </MessageResponse>
-          ) : null}
-          <div className="flex items-center gap-3 border-t border-white/5 pt-2">
+            {card.outcome ? (
+              <MessageResponse className="mt-1.5 text-[12px] leading-relaxed text-muted-foreground">
+                {card.outcome}
+              </MessageResponse>
+            ) : null}
+          </div>
+          <div className="flex items-center gap-2 border-t border-border/55 px-3 py-2">
             <button
               type="button"
-              className="text-[11px] font-medium text-primary hover:underline"
+              className="rounded-md px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
               onClick={() => setExpanded((v) => !v)}
             >
               {expanded ? "collapse" : "expand"}
             </button>
             <button
               type="button"
-              className="text-[11px] font-medium text-muted-foreground hover:text-primary"
+              className="rounded-md px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
               onClick={() => setAddingToChecklist((v) => !v)}
             >
               {addingToChecklist ? "cancel" : "to checklist"}
             </button>
           </div>
           {addingToChecklist ? (
-            <div className="mt-1.5 flex items-center gap-1.5">
+            <div className="flex items-center gap-1.5 border-t border-border/55 px-3 py-2">
               {SECTIONS.map((s) => (
                 <button
                   key={s}
                   type="button"
                   onClick={() => void handleChecklistAdd(s)}
-                  className="rounded bg-muted px-2 py-0.5 text-[11px] hover:bg-muted/80"
+                  className="rounded-md border border-border/60 bg-muted/55 px-2 py-0.5 text-[11px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                 >
                   {s}
                 </button>
               ))}
             </div>
           ) : null}
-          {expanded ? <RawOutput rawOutput={card.raw_output} /> : null}
+          {expanded ? (
+            <div className="border-t border-border/55 px-3 py-2.5">
+              <RawOutput rawOutput={card.raw_output} />
+            </div>
+          ) : null}
         </>
       ) : null}
 
       {card.status === "done" && !card.summary && card.error ? (
-        <>
-          <p className="text-[12px] text-amber-400">{card.error}</p>
+        <div data-lair-card-section="issue" className="px-3 py-2.5">
+          <SectionLabel>issue</SectionLabel>
+          <p className="text-[12px] leading-relaxed text-amber-500">{card.error}</p>
           <RawOutput rawOutput={card.raw_output} />
-        </>
+        </div>
       ) : null}
 
       {card.status === "failed" ? (
-        <>
-          <p className="text-[12px] text-destructive">
+        <div data-lair-card-section="issue" className="px-3 py-2.5">
+          <SectionLabel>issue</SectionLabel>
+          <p className="text-[12px] leading-relaxed text-destructive">
             {card.error || "failed"}
           </p>
           {card.raw_output ? <RawOutput rawOutput={card.raw_output} /> : null}
-        </>
+        </div>
       ) : null}
+    </div>
+  );
+}
+
+function agentTone(agent: CardData["agent"]) {
+  return agent === "claude"
+    ? {
+        card: "border-l-primary/55",
+        dot: "bg-primary/80 shadow-[0_0_12px_color-mix(in_oklch,var(--primary)_35%,transparent)]",
+      }
+    : {
+        card: "border-l-foreground/25",
+        dot: "bg-foreground/65 shadow-[0_0_12px_color-mix(in_oklch,var(--foreground)_20%,transparent)]",
+      };
+}
+
+function SectionLabel({ children }: { children: string }) {
+  return (
+    <div className="mb-1.5 font-mono text-[9.5px] font-medium uppercase tracking-wide text-muted-foreground/75">
+      {children}
     </div>
   );
 }
@@ -142,7 +181,7 @@ function StreamingState({ raw }: { raw: string }) {
         {showRaw ? "hide raw" : "show raw"}
       </button>
       {showRaw ? (
-        <pre className="max-h-32 overflow-y-auto rounded-md bg-background/60 px-2 py-1.5 whitespace-pre-wrap text-[11px] text-muted-foreground">
+        <pre className="max-h-32 overflow-y-auto rounded-md border border-border/60 bg-card/70 px-2 py-1.5 whitespace-pre-wrap text-[11px] text-muted-foreground">
           {raw || "..."}
         </pre>
       ) : null}
@@ -157,7 +196,7 @@ function shortModelLabel(id: string): string {
 
 function RawOutput({ rawOutput }: { rawOutput: string }) {
   return (
-    <pre className="mt-2 max-h-96 overflow-y-auto rounded bg-background/80 p-2 text-[11px] whitespace-pre-wrap text-muted-foreground">
+    <pre className="mt-2 max-h-96 overflow-y-auto rounded-md border border-border/60 bg-card/70 p-2 font-mono text-[11px] leading-relaxed whitespace-pre-wrap text-muted-foreground">
       {rawOutput}
     </pre>
   );
@@ -170,8 +209,14 @@ function StatusBadge({ status }: { status: CardData["status"] }) {
     done: "done",
     failed: "failed",
   };
+  const tone: Record<CardData["status"], string> = {
+    streaming: "border-primary/25 bg-primary/10 text-primary",
+    summarizing: "border-border/60 bg-muted/50 text-muted-foreground",
+    done: "border-emerald-500/25 bg-emerald-500/10 text-emerald-500",
+    failed: "border-destructive/30 bg-destructive/10 text-destructive",
+  };
   return (
-    <span className="rounded bg-muted/50 px-1.5 py-0.5 text-[10.5px] text-muted-foreground">
+    <span className={`rounded-md border px-1.5 py-0.5 text-[10.5px] ${tone[status]}`}>
       {map[status]}
     </span>
   );

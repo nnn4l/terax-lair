@@ -288,16 +288,27 @@ export function LairChat({ onClose }: { onClose?: () => void }) {
   }
 
   return (
-    <div className="relative flex h-full min-h-0 flex-col bg-card text-[12px]">
+    <div
+      data-lair-surface="graphite-console"
+      className="relative flex h-full min-h-0 flex-col overflow-hidden bg-card text-[12px] text-card-foreground"
+    >
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-foreground/[0.03] to-transparent"
+        className="pointer-events-none absolute inset-x-0 top-0 h-40 bg-[radial-gradient(circle_at_50%_-18%,var(--accent),transparent_46%)] opacity-70"
       />
-      <div className="relative flex h-11 shrink-0 items-center justify-between gap-2 border-b border-border/60 px-3">
-        <div className="flex min-w-0 items-center gap-2">
-          <span className="shrink-0 text-[12px] font-semibold tracking-tight">
-            Lair
-          </span>
+      <div className="relative flex h-12 shrink-0 items-center justify-between gap-2 border-b border-border/70 bg-card/85 px-3">
+        <div className="flex min-w-0 items-center gap-2.5">
+          <div className="flex size-6 shrink-0 items-center justify-center rounded-lg border border-border/70 bg-background/60 shadow-[inset_0_1px_0_color-mix(in_oklch,var(--foreground)_8%,transparent)]">
+            <span className="size-1.5 rounded-full bg-primary shadow-[0_0_14px_color-mix(in_oklch,var(--primary)_45%,transparent)]" />
+          </div>
+          <div className="flex min-w-0 flex-col">
+            <span className="shrink-0 text-[12px] font-semibold leading-none tracking-tight">
+              Lair
+            </span>
+            <span className="mt-0.5 truncate text-[10px] leading-none text-muted-foreground">
+              agent console
+            </span>
+          </div>
           <SessionPicker
             sessions={sessions}
             activeSessionId={activeSessionId}
@@ -308,7 +319,7 @@ export function LairChat({ onClose }: { onClose?: () => void }) {
           />
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
-          <span className="rounded-md bg-muted/50 px-1.5 py-0.5 text-[10.5px] text-muted-foreground">
+          <span className="rounded-md border border-border/60 bg-background/60 px-1.5 py-0.5 text-[10.5px] text-muted-foreground tabular-nums">
             {sending ? "working" : `${turns.length} turns`}
           </span>
           {onClose ? (
@@ -326,9 +337,11 @@ export function LairChat({ onClose }: { onClose?: () => void }) {
       </div>
 
       {currentItem ? (
-        <div className="relative flex min-h-8 shrink-0 items-center gap-2 border-b border-border/50 bg-muted/20 px-3 text-[11px]">
-          <span className="shrink-0 text-muted-foreground">Now:</span>
-          <span className="min-w-0 flex-1 truncate font-medium">{currentItem.label}</span>
+        <div className="relative flex min-h-9 shrink-0 items-center gap-2 border-b border-border/60 bg-muted/25 px-3 text-[11px]">
+          <span className="shrink-0 rounded bg-background/70 px-1.5 py-0.5 font-mono text-[9.5px] uppercase tracking-wide text-muted-foreground">
+            now
+          </span>
+          <span className="min-w-0 flex-1 truncate font-medium text-foreground/90">{currentItem.label}</span>
           {cursor.pinned ? (
             <button
               type="button"
@@ -336,7 +349,7 @@ export function LairChat({ onClose }: { onClose?: () => void }) {
                 void queueUnpin();
                 setCursor(cursor.itemId, false);
               }}
-              className="shrink-0 rounded px-1.5 py-0.5 text-amber-500 hover:bg-muted"
+              className="shrink-0 rounded-md border border-border/60 bg-background/60 px-1.5 py-0.5 text-[10.5px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
             >
               unpin
             </button>
@@ -348,7 +361,7 @@ export function LairChat({ onClose }: { onClose?: () => void }) {
         ref={threadRef}
         onScroll={handleThreadScroll}
         data-lair-thread="true"
-        className="min-h-0 flex-1 overflow-y-auto px-3 py-3"
+        className="relative min-h-0 flex-1 overflow-y-auto px-3.5 py-3.5"
       >
         {isEmpty ? (
           <div className="flex min-h-full flex-col">
@@ -368,7 +381,7 @@ export function LairChat({ onClose }: { onClose?: () => void }) {
             ) : null}
           </div>
         ) : (
-          <div className="flex flex-col gap-3 pb-4">
+          <div className="flex flex-col gap-4 pb-4">
             {staleReports.length > 0 && staleSpecFile ? (
               <StaleSpecCard reports={staleReports} specFile={staleSpecFile} />
             ) : null}
@@ -394,15 +407,25 @@ export function LairChat({ onClose }: { onClose?: () => void }) {
         )}
       </div>
 
-      <div className="border-t border-border/60 bg-card/80 px-3 pt-2 pb-3">
-        <div className="relative rounded-md border border-border bg-background focus-within:ring-1 focus-within:ring-ring">
+      <div className="border-t border-border/70 bg-card/90 px-3 pt-2.5 pb-3">
+        <div
+          data-lair-composer="command-surface"
+          className="relative rounded-lg border border-border/80 bg-background/80 shadow-[0_1px_0_color-mix(in_oklch,var(--foreground)_7%,transparent)_inset] transition-[border-color,box-shadow] duration-200 focus-within:border-ring/70 focus-within:shadow-[0_0_0_3px_color-mix(in_oklch,var(--ring)_18%,transparent)]"
+        >
+          <div className="flex h-7 items-center gap-1.5 border-b border-border/45 px-3 text-[10.5px] text-muted-foreground">
+            <span className="font-mono uppercase tracking-wide">command</span>
+            <span className="text-muted-foreground/45">/</span>
+            <span className="min-w-0 truncate">
+              {currentItem ? currentItem.label : workspace ? "workspace ready" : "set workspace first"}
+            </span>
+          </div>
           <textarea
             ref={composerRef}
             aria-label="Message Lair"
-            className="block min-h-28 w-full resize-none rounded-md bg-transparent p-2.5 pb-10 text-[13px] leading-relaxed outline-none"
+            className="block min-h-28 w-full resize-none rounded-lg bg-transparent px-3 py-2.5 pb-11 text-[13px] leading-relaxed outline-none placeholder:text-muted-foreground/70"
             value={text}
             onChange={(event) => setText(event.target.value)}
-            placeholder="type message..."
+            placeholder="Message Lair..."
             onKeyDown={(event) => {
               if (event.key === "Enter" && !event.shiftKey) {
                 event.preventDefault();
@@ -418,7 +441,7 @@ export function LairChat({ onClose }: { onClose?: () => void }) {
               <button
                 type="button"
                 onClick={() => useLair.getState().toggleCritiqueTray()}
-                className="flex h-6 items-center gap-1.5 rounded-md bg-muted px-2 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-muted/80 hover:text-foreground"
+                className="flex h-6 items-center gap-1.5 rounded-md border border-border/60 bg-muted/70 px-2 text-[11px] font-medium text-muted-foreground transition-[background-color,color,transform] duration-200 hover:bg-muted hover:text-foreground active:translate-y-px"
                 title="Critique tray"
                 aria-label="Toggle critique tray"
               >
@@ -431,7 +454,7 @@ export function LairChat({ onClose }: { onClose?: () => void }) {
               </button>
               <button
                 type="button"
-                className="flex h-6 items-center gap-1.5 rounded-md bg-primary px-2 text-[11px] font-medium text-primary-foreground disabled:opacity-40"
+                className="flex h-6 items-center gap-1.5 rounded-md bg-primary px-2.5 text-[11px] font-semibold text-primary-foreground transition-[opacity,transform] duration-200 active:translate-y-px disabled:opacity-40"
                 onClick={submit}
                 disabled={!canSend}
                 title="Send"
@@ -474,7 +497,7 @@ function SessionPicker({
       >
         <SelectTrigger
           size="sm"
-          className="h-5 w-auto max-w-[11rem] gap-1 rounded-md border-0 bg-transparent px-1.5 py-0 text-[10.5px] text-muted-foreground hover:bg-accent hover:text-foreground [&>svg]:size-3"
+          className="h-6 w-auto max-w-[10rem] gap-1 rounded-md border border-transparent bg-transparent px-1.5 py-0 text-[10.5px] text-muted-foreground hover:border-border/60 hover:bg-background/50 hover:text-foreground [&>svg]:size-3"
           title="Switch Lair chat"
         >
           <SelectValue placeholder={activeTitle} />
@@ -531,21 +554,23 @@ function EmptyState({ onPick }: { onPick: (text: string) => void }) {
       ];
 
   return (
-    <div className="flex h-full flex-col items-center justify-center gap-4 px-8 py-10 text-center">
-      <img src="/logo.png" alt="Lair" className="size-14 opacity-90" />
-      <div className="space-y-1">
+    <div className="flex h-full flex-col items-center justify-center gap-4 px-7 py-10 text-center">
+      <div className="rounded-2xl border border-border/70 bg-background/65 p-2 shadow-[inset_0_1px_0_color-mix(in_oklch,var(--foreground)_7%,transparent)]">
+        <img src="/logo.png" alt="Lair" className="size-11 opacity-90" />
+      </div>
+      <div className="space-y-1.5">
         <p className="text-[14px] font-semibold tracking-tight">Lair / {workspaceLabel}</p>
-        <p className="text-[11px] text-muted-foreground">
+        <p className="text-[11.5px] leading-relaxed text-muted-foreground">
           {currentItem ? `Current: ${currentItem.label}` : "Pick a starter or type a message."}
         </p>
       </div>
-      <div className="flex w-full flex-col gap-2">
+      <div className="flex w-full flex-col gap-1.5">
         {suggestions.map((s) => (
           <button
             key={s.label}
             type="button"
             onClick={() => onPick(s.prompt)}
-            className="rounded-lg border border-border bg-card/70 px-3 py-2 text-left text-[12px] font-medium text-foreground transition-colors hover:bg-muted/50"
+            className="rounded-lg border border-border/70 bg-background/60 px-3 py-2 text-left text-[12px] font-medium text-foreground transition-[background-color,border-color,transform] duration-200 hover:border-border hover:bg-muted/55 active:translate-y-px"
           >
             <span className="block">{s.label}</span>
             <span className="mt-0.5 block text-[11px] font-normal text-muted-foreground">
@@ -581,9 +606,16 @@ export function TurnView({
     .filter((n): n is NarrationData => Boolean(n));
 
   return (
-    <div className="group/turn flex flex-col gap-2.5">
+    <div data-lair-turn="timeline" className="group/turn relative flex flex-col gap-2.5 pl-3">
+      <div
+        aria-hidden
+        className="absolute bottom-1.5 left-0 top-1.5 w-px bg-gradient-to-b from-primary/35 via-border/60 to-border/20"
+      />
       <div data-lair-role="user" className="flex flex-col items-end gap-1">
-        <div className="max-w-[85%] rounded-xl rounded-br-sm border border-white/5 bg-white/[0.03] px-3 py-2">
+        <PhaseLabel phase="prompt" align="right">
+          prompt
+        </PhaseLabel>
+        <div className="max-w-[88%] rounded-xl rounded-br-md border border-border/70 bg-background/65 px-3 py-2 shadow-[inset_0_1px_0_color-mix(in_oklch,var(--foreground)_6%,transparent)]">
           <p className="whitespace-pre-wrap text-[13px] font-medium leading-relaxed text-foreground/90">
             {turn.prompt}
           </p>
@@ -598,6 +630,7 @@ export function TurnView({
         </div>
       </div>
       <div data-lair-role="assistant" className="flex flex-col gap-1.5">
+        <PhaseLabel phase="agent-work">agent work</PhaseLabel>
         {turnNarrations.map((n) => (
           <NarrationLine key={n.id} line={n} />
         ))}
@@ -627,10 +660,29 @@ export function TurnView({
   );
 }
 
+function PhaseLabel({
+  phase,
+  align = "left",
+  children,
+}: {
+  phase: string;
+  align?: "left" | "right";
+  children: string;
+}) {
+  return (
+    <div
+      data-lair-phase={phase}
+      className={`font-mono text-[9.5px] font-medium uppercase tracking-wide text-muted-foreground/70 ${align === "right" ? "pr-0.5 text-right" : "pl-0.5"}`}
+    >
+      {children}
+    </div>
+  );
+}
+
 function ThinkingState() {
   return (
-    <div className="rounded-xl border border-white/5 bg-white/[0.03] px-3 py-2.5 text-[12px] text-muted-foreground">
-      <span className="mr-2 inline-block size-1.5 animate-pulse rounded-full bg-foreground/40 align-middle" />
+    <div className="rounded-xl border border-border/70 bg-background/55 px-3 py-2.5 text-[12px] text-muted-foreground">
+      <span className="mr-2 inline-block size-1.5 animate-pulse rounded-full bg-primary/70 align-middle" />
       <span>Thinking</span>
     </div>
   );
@@ -644,13 +696,13 @@ function ErrorState({
   onRetry: () => void;
 }) {
   return (
-    <div className="rounded-lg border border-destructive/40 bg-destructive/5 px-2.5 py-2 text-[12px] text-destructive">
+    <div className="rounded-lg border border-destructive/35 bg-destructive/5 px-2.5 py-2 text-[12px] text-destructive">
       <div className="flex items-start justify-between gap-3">
         <p className="leading-relaxed">{message}</p>
         <button
           type="button"
           onClick={onRetry}
-          className="shrink-0 rounded-md bg-destructive/10 px-2 py-1 text-[11px] font-medium hover:bg-destructive/15"
+          className="shrink-0 rounded-md bg-destructive/10 px-2 py-1 text-[11px] font-medium transition-colors hover:bg-destructive/15"
         >
           retry
         </button>
@@ -679,7 +731,7 @@ function IconButton({
       title={title}
       onClick={onClick}
       disabled={disabled}
-      className="flex size-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+      className="flex size-6 items-center justify-center rounded-md text-muted-foreground transition-[background-color,color,transform] duration-200 hover:bg-accent hover:text-foreground active:translate-y-px disabled:cursor-not-allowed disabled:opacity-40"
     >
       <HugeiconsIcon icon={icon} size={12} strokeWidth={1.75} />
     </button>
