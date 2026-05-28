@@ -33,6 +33,7 @@ pub enum CardStatus {
     Summarizing,
     Done,
     Failed,
+    Stopped,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -60,7 +61,9 @@ pub struct CardData {
 pub struct SendMessageRequest {
     pub turn_id: String,
     pub prompt: String,
-    pub agent_choice: AgentChoice,
+    pub lane_id: String,
+    #[serde(default)]
+    pub use_auto: bool,
     pub phase: Phase,
     pub workspace: String,
     pub task_context: Option<QueueContext>,
@@ -203,4 +206,87 @@ pub struct HubTab {
 pub struct HubState {
     pub tabs: Vec<HubTab>,
     pub active_tab_id: Option<String>,
+}
+
+// ---- M3: Lane types ----
+
+pub type LaneId = String;
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum LaneRole {
+    Implementor,
+    Reviewer,
+    Consultant,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum CostTier {
+    Free,
+    Cheap,
+    Standard,
+    Expensive,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct Lane {
+    pub id: LaneId,
+    pub label: String,
+    pub cli: String,
+    #[serde(default)]
+    pub env: std::collections::HashMap<String, String>,
+    pub default_model: Option<String>,
+    pub default_effort: Option<String>,
+    pub role: LaneRole,
+    pub cost_tier: CostTier,
+    #[serde(default)]
+    pub clear_required: bool,
+    pub backend: Option<String>,
+    #[serde(default)]
+    pub auto_bias: Vec<String>,
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    pub context_window: Option<u32>,
+}
+
+fn default_true() -> bool {
+    true
+}
+
+impl Default for LaneRole {
+    fn default() -> Self {
+        LaneRole::Implementor
+    }
+}
+
+impl Default for CostTier {
+    fn default() -> Self {
+        CostTier::Standard
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct LaneStatus {
+    pub lane_id: LaneId,
+    pub context_pct: Option<f32>,
+    pub tokens_in: u32,
+    pub tokens_out: u32,
+    pub cost_usd: f32,
+    pub last_updated_ms: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum BackendStatus {
+    Stopped,
+    Starting,
+    Running,
+    Crashed,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BackendStatusEvent {
+    pub id: String,
+    pub status: BackendStatus,
 }

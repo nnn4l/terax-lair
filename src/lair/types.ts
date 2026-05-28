@@ -7,7 +7,7 @@ export interface ApprovalGate {
 export type Agent = "claude" | "codex";
 export type AgentChoice = "claude" | "codex" | "compare" | "auto";
 export type Phase = "implement" | "refactor" | "test" | "critique" | "review";
-export type CardStatus = "streaming" | "summarizing" | "done" | "failed";
+export type CardStatus = "streaming" | "summarizing" | "done" | "failed" | "stopped";
 export type ChecklistSection = "queue" | "done";
 
 export interface Usage {
@@ -32,7 +32,8 @@ export interface CardData {
 export interface SendMessageRequest {
   turn_id: string;
   prompt: string;
-  agent_choice: AgentChoice;
+  lane_id: string;
+  use_auto: boolean;
   phase: Phase;
   workspace: string;
   task_context?: QueueContext;
@@ -148,7 +149,7 @@ export interface LairSession {
   updatedAt: number;
   workspace: string;
   phase: Phase;
-  agentChoice: AgentChoice;
+  agentChoice: AgentChoice;  // M3 migration: maps to lane_id
   turnIds: string[];
   turns: Turn[];
   cards: CardData[];
@@ -168,4 +169,41 @@ export interface HubTab {
 export interface HubState {
   tabs: HubTab[];
   active_tab_id: string | null;
+}
+
+// ---- M3: Lane types ----
+
+export type LaneId = string;
+export type LaneRole = "implementor" | "reviewer" | "consultant";
+export type CostTier = "free" | "cheap" | "standard" | "expensive";
+export type BackendStatus = "stopped" | "starting" | "running" | "crashed";
+
+export interface Lane {
+  id: LaneId;
+  label: string;
+  cli: string;
+  env: Record<string, string>;
+  default_model: string | null;
+  default_effort: string | null;
+  role: LaneRole;
+  cost_tier: CostTier;
+  clear_required: boolean;
+  backend: string | null;
+  auto_bias: string[];
+  enabled: boolean;
+  context_window: number | null;
+}
+
+export interface LaneStatus {
+  lane_id: LaneId;
+  context_pct: number | null;
+  tokens_in: number;
+  tokens_out: number;
+  cost_usd: number;
+  last_updated_ms: number;
+}
+
+export interface BackendStatusEvent {
+  id: string;
+  status: BackendStatus;
 }
