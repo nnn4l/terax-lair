@@ -967,3 +967,10 @@ fn kill_process(pid: u32) -> Result<(), String> {
     // Not used on non-Windows for M3; stub
     Err(format!("kill not implemented for pid {pid}"))
 }
+
+// ---- M3: Backend management ----
+
+#[tauri::command]
+pub fn lair_restart_backend(backend_id: String) -> Result<(), String> {
+    crate::lair::backend_manager::BACKEND_MANAGER.restart(&backend_id)
+}

@@ -10,7 +10,8 @@ use lair::orchestrator::{
     lair_queue_edit_context, lair_queue_get, lair_queue_mark_done, lair_queue_pause,
     lair_queue_pin, lair_queue_resync, lair_queue_resume, lair_queue_set_autopilot,
     lair_queue_skip, lair_queue_unpin, lair_read_checklist, lair_read_pillars,
-    lair_run_pillar_check, lair_save_lane, lair_send_message, lair_stop_card,
+    lair_restart_backend, lair_run_pillar_check, lair_save_lane, lair_send_message,
+    lair_stop_card,
     lair_toggle_checklist_item, lair_watch_checklist, LairConfig, LairState,
 };
 use lair::hub_tabs::{
@@ -149,6 +150,32 @@ pub fn run() {
                 }
             });
 
+            // Lane file watcher — reloads cache + restarts backends on config change
+            let state: tauri::State<'_, Arc<crate::lair::orchestrator::LairState>> = app.state();
+            let state_for_watch = state.inner().clone();
+            let state_for_store = state.inner().clone();
+            let handle_clone = app.handle().clone();
+            let watcher = crate::lair::lanes::watch(move || {
+                let lanes = crate::lair::lanes::load().unwrap_or_default();
+                *state_for_watch.lanes_cache.lock().unwrap() = lanes.clone();
+                let _ = handle_clone.emit("lair-lanes-changed", &lanes);
+                let needs_proxy = lanes
+                    .iter()
+                    .any(|l| l.enabled && l.backend.as_deref() == Some("uniclaude-proxy"));
+                let running = matches!(
+                    crate::lair::backend_manager::BACKEND_MANAGER.status("uniclaude-proxy"),
+                    crate::lair::types::BackendStatus::Running,
+                );
+                if needs_proxy && !running {
+                    let _ = crate::lair::backend_manager::spawn_uniclaude_proxy();
+                } else if !needs_proxy && running {
+                    let _ = crate::lair::backend_manager::BACKEND_MANAGER.stop("uniclaude-proxy");
+                }
+            });
+            if let Ok(handle) = watcher {
+                *state_for_store.lanes_watcher.lock().unwrap() = Some(handle);
+            }
+
             let dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
             let initial = crate::lair::hub_tabs::load(&dir);
             app.manage(HubTabsState(Mutex::new(initial)));
@@ -267,6 +294,7 @@ pub fn run() {
             lair_get_all_lane_status,
             lair_clear_lane,
             lair_stop_card,
+            lair_restart_backend,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
