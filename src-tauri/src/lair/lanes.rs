@@ -152,7 +152,6 @@ id = "deepseek-pro"
 label = "DeepSeek Pro"
 cli = "claude"
 default_model = "claude-sonnet-4-5"
-default_effort = "medium"
 role = "implementor"
 cost_tier = "standard"
 clear_required = true

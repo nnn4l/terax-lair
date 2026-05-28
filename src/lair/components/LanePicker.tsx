@@ -88,7 +88,7 @@ export function LanePicker() {
   const userModel = active?.cli === "codex" ? codexModel : claudeModel;
   const userEffort = active?.cli === "codex" ? codexEffort : claudeEffort;
   const displayModel = (isAuto || isBackendLane) ? null : userModel ?? active?.default_model ?? null;
-  const displayEffort = isAuto ? null : userEffort ?? active?.default_effort ?? null;
+  const displayEffort = (isAuto || isBackendLane) ? null : userEffort ?? active?.default_effort ?? null;
   const effortAbbr: Record<string, string> = { low: "Low", medium: "Med", high: "Hi", xhigh: "X-Hi", max: "Max" };
 
   const grouped = ROLE_ORDER
