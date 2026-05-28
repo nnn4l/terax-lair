@@ -44,7 +44,7 @@ export function LanePicker() {
   const setActiveLaneId = useLair((s) => s.setActiveLaneId);
   const backendStatuses = useLair((s) => s.backendStatuses);
 
-  const enabledLanes = lanes.filter((l) => l.enabled);
+  const allLanes = lanes; // show all lanes including disabled
   const autoLane: Lane = {
     id: "auto",
     label: "Auto",
@@ -62,15 +62,17 @@ export function LanePicker() {
   };
 
   const active =
-    enabledLanes.find((l) => l.id === activeLaneId) ??
+    allLanes.find((l) => l.id === activeLaneId && l.enabled) ??
+    allLanes.find((l) => l.id === activeLaneId) ??
     (activeLaneId === "auto" ? autoLane : null) ??
-    enabledLanes[0];
+    allLanes.find((l) => l.enabled) ??
+    allLanes[0];
   const ActiveIcon = active ? ROLE_ICON[active.role] : CodeIcon;
 
   const grouped = ROLE_ORDER
     .map((role) => ({
       role,
-      items: enabledLanes.filter((l) => l.role === role),
+      items: allLanes.filter((l) => l.role === role),
     }))
     .filter((g) => g.items.length > 0);
 
@@ -110,22 +112,34 @@ export function LanePicker() {
               {ROLE_LABEL[g.role]}
             </div>
             {g.items.map((lane) => {
-              const backendOk =
-                !lane.backend || backendStatuses[lane.backend] === "running";
+              const disabled = !lane.enabled;
+              const backendDown =
+                !disabled &&
+                lane.backend != null &&
+                backendStatuses[lane.backend] !== "running";
+              const selectable = !disabled && !backendDown;
               return (
                 <LaneMenuItem
                   key={lane.id}
                   lane={lane}
                   active={activeLaneId === lane.id}
                   onSelect={() => setActiveLaneId(lane.id)}
-                  disabled={!backendOk}
-                  backendDown={!backendOk}
+                  disabled={!selectable}
+                  disabledHint={
+                    disabled
+                      ? "enable in settings"
+                      : backendDown
+                        ? "backend unavailable"
+                        : undefined
+                  }
                   description={
-                    !backendOk
-                      ? "backend unavailable"
-                      : lane.default_model
-                        ? `${lane.default_model.replace(/^claude-/, "")} · ${COST_LABEL[lane.cost_tier] ?? lane.cost_tier}`
-                        : COST_LABEL[lane.cost_tier] ?? lane.cost_tier
+                    disabled
+                      ? "disabled"
+                      : backendDown
+                        ? "backend unavailable"
+                        : lane.default_model
+                          ? `${lane.default_model.replace(/^claude-/, "")} · ${COST_LABEL[lane.cost_tier] ?? lane.cost_tier}`
+                          : COST_LABEL[lane.cost_tier] ?? lane.cost_tier
                   }
                 />
               );
@@ -148,17 +162,18 @@ function LaneMenuItem({
   active,
   onSelect,
   disabled,
-  backendDown,
+  disabledHint,
   description,
 }: {
   lane: Lane;
   active: boolean;
   onSelect: () => void;
   disabled?: boolean;
-  backendDown?: boolean;
+  disabledHint?: string;
   description?: string;
 }) {
   const Icon = ROLE_ICON[lane.role] ?? CodeIcon;
+  const greyedOut = disabled && !active;
   return (
     <DropdownMenuItem
       disabled={disabled}
@@ -166,6 +181,7 @@ function LaneMenuItem({
       className={cn(
         "flex items-start gap-2 pr-2 text-[12px]",
         active && "bg-accent/40",
+        greyedOut && "opacity-50",
       )}
     >
       <HugeiconsIcon
@@ -174,15 +190,17 @@ function LaneMenuItem({
         strokeWidth={1.75}
         className={cn(
           "mt-0.5",
-          active ? "text-foreground" : "text-muted-foreground",
-          backendDown && "text-amber-500",
+          active ? "text-foreground" : greyedOut ? "text-muted-foreground/50" : "text-muted-foreground",
+          disabledHint && !active && "text-amber-500",
         )}
       />
       <span className="flex min-w-0 flex-1 flex-col">
-        <span className={cn(backendDown && "text-muted-foreground")}>
+        <span className={cn(greyedOut && "text-muted-foreground")}>
           {lane.label}
-          {backendDown ? (
-            <span className="ml-2 text-[10px] text-amber-500">backend down</span>
+          {disabledHint ? (
+            <span className="ml-2 text-[10px] text-muted-foreground">
+              {disabledHint}
+            </span>
           ) : null}
         </span>
         {description ? (
